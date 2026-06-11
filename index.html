@@ -1304,31 +1304,19 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 const GEO_WMS = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 const GEO_WMS_HTTP = 'http://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 async function geoFetch(url){
-  // JSONP: bypasses CORS entirely — works from file:// — GeoServer supports natively
-  try{
-    const data = await new Promise((resolve, reject) => {
-      const cb = '_geo' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-      const tid = setTimeout(() => { cleanup(); reject(new Error('timeout')); }, 15000);
-      window[cb] = d => { cleanup(); resolve(d); };
-      function cleanup(){ clearTimeout(tid); delete window[cb]; if(s.parentNode) s.remove(); }
-      const s = document.createElement('script');
-      const jpUrl = url.replace('outputFormat=application%2Fjson','outputFormat=text/javascript')
-                       .replace('outputFormat=application/json','outputFormat=text/javascript')
-                   + '&format_options=callback:' + cb;
-      s.src = jpUrl;
-      s.onerror = () => { cleanup(); reject(new Error('script error')); };
-      document.head.appendChild(s);
-    });
-    return data;
-  }catch(e){}
-  // Fallback: direct fetch (works via http://)
+  // 1. Direct fetch (works via https://)
   try{
     const r = await fetch(url);
     if(r.ok) return r.json();
   }catch(e){}
-  // Last resort: corsproxy.io
+  // 2. corsproxy.io
   try{
     const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+    if(r.ok) return r.json();
+  }catch(e){}
+  // 3. allorigins
+  try{
+    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
     if(r.ok) return r.json();
   }catch(e){}
   throw new Error('geoFetch: all methods failed');
