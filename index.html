@@ -800,6 +800,7 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script src="https://unpkg.com/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -1094,6 +1095,9 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
           <button class="btn-draw-poly" id="btn-select-lotes" style="flex:1;margin-top:0" onclick="toggleSelectLotes()">🖱️ Selecionar Lotes</button>
           <button id="btn-clear-lotes" onclick="clearSelectedLotes()" style="display:none;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--muted);white-space:nowrap">✕ Limpar</button>
         </div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn-draw-poly" id="btn-ocr-lotes" style="flex:1;margin-top:0;background:var(--bg);border:1px solid var(--border);color:var(--text)" onclick="ocrLotesClick()">🔍 Ler Lotes (OCR)</button>
+        </div>
       </div>
       <div class="field"><label>Observações / Follow Up</label><textarea id="f-obs"></textarea></div>
 
@@ -1298,6 +1302,13 @@ let _selectingLotes = false; // modo de seleção manual de lotes
 
 function fmtSQLprops(p){
   if(!p) return '—';
+  if(p._from_ocr){
+    const l=(p.cd_lote||'').padStart(4,'0');
+    const s=(p.cd_setor_fiscal||'').trim().padStart(3,'0');
+    const q=(p.cd_quadra_fiscal||'').trim().padStart(3,'0');
+    if(s&&q&&s!=='000'&&q!=='000') return `${s}.${q}.${l}`;
+    return 'F'+l+'_ocr';
+  }
   const s=(p.cd_setor_fiscal||'').trim().padStart(3,'0');
   const q=(p.cd_quadra_fiscal||'').trim().padStart(3,'0');
   const l=(p.cd_lote||'').trim().padStart(4,'0');
@@ -2049,6 +2060,125 @@ function clearSelectedLotes(){
   renderLotesBadge();
 }
 
+async function ocrLotesClick(){
+  // Precisa de polígono
+  let pts = pendingPolygons[0];
+  if(!pts && editingId){
+    const t = db_local.find(x=>x.id===editingId);
+    if(t?.polygon) pts = t.polygon;
+  }
+  if(!pts || pts.length < 3){
+    alert('Desenhe um polígono primeiro para usar o OCR.');
+    return;
+  }
+  await ocrLotesNoPoligono(pts);
+}
+
+async function ocrLotesNoPoligono(pts){
+  const btn = document.getElementById('btn-ocr-lotes');
+  if(btn) btn.textContent = '⏳ Obtendo imagem…';
+
+  const lats = pts.map(p=>p[0]), lngs = pts.map(p=>p[1]);
+  const pad = 0.0003;
+  const minLat = Math.min(...lats)-pad, maxLat = Math.max(...lats)+pad;
+  const minLng = Math.min(...lngs)-pad, maxLng = Math.max(...lngs)+pad;
+
+  const W = 1600, H = 1200;
+  const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
+  // Pede camada de lotes em branco (sem fundo de mapa) — só rótulos F são visíveis
+  const wmsUrl = `https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&SRS=EPSG:4326&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
+
+  // wsrv.nl: proxy de imagem gratuito que adiciona CORS headers
+  const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://', ''));
+
+  try{
+    // Carregar imagem via proxy
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.crossOrigin = 'anonymous';
+      i.onload = () => res(i);
+      i.onerror = (e) => rej(new Error('Falha ao carregar imagem do mapa'));
+      i.src = proxied;
+    });
+
+    // Desenha no canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+
+    if(btn) btn.textContent = '🔍 Lendo texto… 0%';
+
+    // OCR com Tesseract.js
+    const result = await Tesseract.recognize(canvas, 'por', {
+      logger: m => {
+        if(m.status === 'recognizing text' && btn)
+          btn.textContent = `🔍 Lendo… ${Math.round(m.progress*100)}%`;
+      }
+    });
+
+    const rawText = result.data.text;
+    console.log('[OCR] texto bruto:', rawText.slice(0, 400));
+
+    // Extrai códigos F: "F 0036", "F0036", "F036", variações OCR como "F O036"
+    // Normaliza: remove espaços/O/0 confusion
+    const normalized = rawText.replace(/F\s+O/g, 'F 0').replace(/F\s+o/g, 'F 0');
+    const matches = normalized.match(/F\s*0*([0-9]{3,4})/g) || [];
+    const codes = [...new Set(
+      matches.map(s => {
+        const num = s.replace(/[^0-9]/g,'').padStart(4,'0');
+        return 'F' + num;
+      })
+    )].sort();
+
+    console.log('[OCR] códigos encontrados:', codes);
+
+    if(codes.length === 0){
+      if(btn){ btn.textContent = '⚠️ Nenhum F encontrado'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
+      alert('OCR não encontrou códigos F na área. Verifique se a camada de Lotes está ativa e tente "Selecionar Lotes" manualmente.');
+      return;
+    }
+
+    // Pega setor/quadra do form se preenchidos
+    const setor  = (document.getElementById('f-setor')?.value||'').trim();
+    const quadra = (document.getElementById('f-quadra')?.value||'').trim();
+
+    // Cria objetos de lote para cada código
+    const novosLotes = codes.map(code => ({
+      type: 'Feature',
+      properties: {
+        cd_lote: code.replace('F','').padStart(4,'0'),
+        cd_setor_fiscal: setor,
+        cd_quadra_fiscal: quadra,
+        cd_digito_sql: '',
+        nm_logradouro_completo: '(via OCR)',
+        qt_area_terreno: '',
+        _from_ocr: true,
+        _ocr_code: code
+      },
+      geometry: null
+    }));
+
+    // Adiciona apenas os não-duplicados
+    novosLotes.forEach(f => {
+      const key = f.properties._ocr_code;
+      if(!pendingLotes.find(x => x.properties._ocr_code === key))
+        pendingLotes.push(f);
+    });
+
+    renderLotesBadge();
+    if(btn){ btn.textContent = `✅ ${codes.length} lote(s) lidos`; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },4000); }
+
+    // Ativa camada de lotes se não estiver
+    if(!_geoActive['lotes']) toggleGeoLayer('lotes');
+
+  }catch(err){
+    console.error('[OCR] erro:', err);
+    if(btn){ btn.textContent = '❌ Erro no OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
+    alert('Erro no OCR: ' + err.message + '\n\nTente "Selecionar Lotes" clicando individualmente no mapa.');
+  }
+}
+
+
 async function buscarLotesPoligono(pts){
   if(!pts || pts.length < 3){ pendingLotes = []; _lotesDebug='pts<3'; return; }
   if(!_geoActive['lotes']) toggleGeoLayer('lotes');
@@ -2149,6 +2279,13 @@ async function gerarFicha(){
   const loteN  = lote?.cd_lote || '—';
   const sql    = (setor!=='—'&&quadra!=='—'&&loteN!=='—') ? `${setor}-${quadra}-${loteN}` : '—';
   const fmtSQL = (p) => {
+    if(p._from_ocr){
+      const l = (p.cd_lote||'').padStart(4,'0');
+      const s = (p.cd_setor_fiscal||'').trim().padStart(3,'0');
+      const q = (p.cd_quadra_fiscal||'').trim().padStart(3,'0');
+      if(s&&q&&s!=='000'&&q!=='000') return `${s}.${q}.${l}`;
+      return `F${l} (via OCR)`;
+    }
     const s = (p.cd_setor_fiscal||'').trim().padStart(3,'0');
     const q = (p.cd_quadra_fiscal||'').trim().padStart(3,'0');
     const l = (p.cd_lote||'').trim().padStart(4,'0');
