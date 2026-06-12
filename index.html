@@ -2076,76 +2076,102 @@ async function ocrLotesClick(){
 
 async function ocrLotesNoPoligono(pts){
   const btn = document.getElementById('btn-ocr-lotes');
-  if(btn) btn.textContent = '⏳ Obtendo imagem…';
+  if(btn) btn.textContent = '⏳ Preparando tiles…';
 
   const lats = pts.map(p=>p[0]), lngs = pts.map(p=>p[1]);
-  const pad = 0.0003;
+  const pad = 0.0002;
   const minLat = Math.min(...lats)-pad, maxLat = Math.max(...lats)+pad;
   const minLng = Math.min(...lngs)-pad, maxLng = Math.max(...lngs)+pad;
 
-  // Converter para EPSG:3857 (Web Mercator) — o GeoSampa renderiza labels neste CRS
-  const toMerc = (lat, lng) => {
-    const x = lng * 20037508.34 / 180;
-    const y = Math.log(Math.tan((90+lat)*Math.PI/360)) / (Math.PI/180) * 20037508.34/180;
-    return [x, y];
+  // Usa o mesmo zoom do mapa atual (cap 18) — mesmos tiles que o Leaflet renderiza
+  const zoom = Math.min(Math.max(Math.round(map.getZoom()), 15), 18);
+
+  // lat/lng → tile index (XYZ / Web Mercator)
+  const lngToTX = (lng, z) => Math.floor((lng+180)/360 * Math.pow(2,z));
+  const latToTY = (lat, z) => {
+    const r = lat * Math.PI/180;
+    return Math.floor((1 - Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2 * Math.pow(2,z));
   };
-  const [xMin, yMin] = toMerc(minLat, minLng);
-  const [xMax, yMax] = toMerc(maxLat, maxLng);
+  // tile index → EPSG:3857 bbox
+  const tileToMerc = (tx,ty,z) => {
+    const n = Math.pow(2,z), W = 20037508.34*2;
+    return [
+      tx/n*W - 20037508.34,
+      20037508.34 - (ty+1)/n*W,
+      (tx+1)/n*W - 20037508.34,
+      20037508.34 - ty/n*W
+    ];
+  };
 
-  // Tamanho da imagem: limitar a max ~1600px mas garantir escala fina o suficiente
-  // Scale ~1:2000 → 0.528m/px; para SP, grau ≈ 111km, então 0.001° ≈ 111m
-  const bboxWm = xMax - xMin; // largura em metros
-  const bboxHm = yMax - yMin;
-  // Pixels necessários para escala 1:1500 (garantir labels visíveis)
-  const pxPerMeter = 1 / 0.396; // 0.396m/px ≈ escala 1:1500 a 96dpi
-  let W = Math.round(bboxWm * pxPerMeter);
-  let H = Math.round(bboxHm * pxPerMeter);
-  // Limitar a 1600px (servidor GeoSampa recusa imagens muito grandes)
-  if(W > 1600){ const s=1600/W; W=1600; H=Math.round(H*s); }
-  if(H > 1600){ const s=1600/H; H=1600; W=Math.round(W*s); }
-  W = Math.max(W,256); H = Math.max(H,256);
+  const txMin = lngToTX(minLng, zoom), txMax = lngToTX(maxLng, zoom);
+  const tyMin = latToTY(maxLat, zoom), tyMax = latToTY(minLat, zoom);
+  const cols = txMax - txMin + 1, rows = tyMax - tyMin + 1;
+  const totalTiles = cols * rows;
 
-  const bbox3857 = `${xMin.toFixed(2)},${yMin.toFixed(2)},${xMax.toFixed(2)},${yMax.toFixed(2)}`;
-  const wmsUrl = `https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox3857}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&SRS=EPSG:3857&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
+  if(totalTiles > 25){
+    if(btn){ btn.textContent = '⚠️ Área muito grande para OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
+    alert('Polígono cobre muitos tiles (' + totalTiles + '). Reduza a área ou use "Selecionar Lotes" manualmente.');
+    return;
+  }
 
-  // wsrv.nl: proxy de imagem com CORS + forçar PNG (sem compressão lossy)
-  const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://', '')) + '&output=png';
-  console.log('[OCR] WMS URL (3857):', `${W}x${H}`, bbox3857.slice(0,40));
-  console.log('[OCR] proxied:', proxied.slice(0,120));
+  console.log(`[OCR] zoom=${zoom} tiles=${cols}×${rows}=${totalTiles}`);
+
+  // Monta canvas costurado com todos os tiles
+  const TS = 256; // tile size
+  const canvas = document.createElement('canvas');
+  canvas.width = cols * TS; canvas.height = rows * TS;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const WMS_BASE = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
+
+  let loaded = 0;
+  const fetchTile = (tx, ty) => {
+    const [xMin,yMin,xMax,yMax] = tileToMerc(tx, ty, zoom);
+    const bbox = `${xMin.toFixed(2)},${yMin.toFixed(2)},${xMax.toFixed(2)},${yMax.toFixed(2)}`;
+    const wmsUrl = `${WMS_BASE}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox}&WIDTH=${TS}&HEIGHT=${TS}&FORMAT=image/png&SRS=EPSG:3857&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
+    const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://','')) + '&output=png';
+    const col = tx - txMin, row = ty - tyMin;
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        ctx.drawImage(img, col*TS, row*TS, TS, TS);
+        loaded++;
+        if(btn) btn.textContent = `⏳ Tiles ${loaded}/${totalTiles}…`;
+        resolve();
+      };
+      img.onerror = () => { loaded++; resolve(); };
+      img.src = proxied;
+    });
+  };
 
   try{
-    // Carregar imagem via proxy
-    const img = await new Promise((res, rej) => {
-      const i = new Image();
-      i.crossOrigin = 'anonymous';
-      i.onload = () => res(i);
-      i.onerror = () => rej(new Error('Falha ao carregar imagem via wsrv.nl'));
-      i.src = proxied;
-    });
+    // Carrega todos os tiles em paralelo
+    const promises = [];
+    for(let ty=tyMin; ty<=tyMax; ty++)
+      for(let tx=txMin; tx<=txMax; tx++)
+        promises.push(fetchTile(tx, ty));
+    await Promise.all(promises);
 
-    // Desenha no canvas
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+    if(btn) btn.textContent = '🔍 Aplicando OCR…';
 
-    // Pré-processamento: aumenta contraste para melhorar OCR
-    const imgData = ctx.getImageData(0, 0, W, H);
+    // Pré-processamento: alto contraste → facilita Tesseract em mapas
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const d = imgData.data;
     for(let i=0;i<d.length;i+=4){
       const gray = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-      // Threshold agressivo: texto escuro (< 160) → preto; fundo claro → branco
-      const v = gray < 160 ? 0 : 255;
+      const v = gray < 140 ? 0 : 255;
       d[i]=d[i+1]=d[i+2]=v;
     }
     ctx.putImageData(imgData, 0, 0);
 
-    if(btn) btn.textContent = '🔍 Lendo texto… 0%';
+    if(btn) btn.textContent = '🔍 Lendo… 0%';
 
-    // OCR com Tesseract.js — PSM 11 (texto esparso, bom para mapas)
     const result = await Tesseract.recognize(canvas, 'por', {
       logger: m => {
-        if(m.status === 'recognizing text' && btn)
+        if(m.status==='recognizing text' && btn)
           btn.textContent = `🔍 Lendo… ${Math.round(m.progress*100)}%`;
       },
       tessedit_pageseg_mode: '11',
@@ -2153,62 +2179,44 @@ async function ocrLotesNoPoligono(pts){
     });
 
     const rawText = result.data.text;
-    console.log('[OCR] texto bruto:', rawText.slice(0, 600));
+    console.log('[OCR] texto bruto:', rawText.slice(0,600));
 
-    // Extrai códigos F: "F 0036", "F0036", "F036" — tolerante a OCR errors
-    const normalized = rawText
-      .replace(/[Oo]/g, '0')     // O/o → 0 (confusão OCR comum em números)
-      .replace(/[Il]/g, '1')     // I/l → 1
-      .replace(/\s+/g,' ');
+    const normalized = rawText.replace(/[Oo]/g,'0').replace(/[Il]/g,'1').replace(/\s+/g,' ');
     const matches = normalized.match(/F\s*\d{3,4}/g) || [];
-    const codes = [...new Set(
-      matches.map(s => 'F' + s.replace(/\D/g,'').padStart(4,'0'))
-    )].sort();
-
+    const codes = [...new Set(matches.map(s=>'F'+s.replace(/\D/g,'').padStart(4,'0')))].sort();
     console.log('[OCR] códigos encontrados:', codes);
 
     if(codes.length === 0){
-      if(btn){ btn.textContent = '⚠️ Nenhum F encontrado'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
+      if(btn){ btn.textContent='⚠️ Nenhum F encontrado'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
       alert('OCR não encontrou códigos F na área. Verifique se a camada de Lotes está ativa e tente "Selecionar Lotes" manualmente.');
       return;
     }
 
-    // Pega setor/quadra do form se preenchidos
     const setor  = (document.getElementById('f-setor')?.value||'').trim();
     const quadra = (document.getElementById('f-quadra')?.value||'').trim();
 
-    // Cria objetos de lote para cada código
     const novosLotes = codes.map(code => ({
       type: 'Feature',
       properties: {
         cd_lote: code.replace('F','').padStart(4,'0'),
-        cd_setor_fiscal: setor,
-        cd_quadra_fiscal: quadra,
-        cd_digito_sql: '',
-        nm_logradouro_completo: '(via OCR)',
-        qt_area_terreno: '',
-        _from_ocr: true,
-        _ocr_code: code
-      },
-      geometry: null
+        cd_setor_fiscal: setor, cd_quadra_fiscal: quadra,
+        cd_digito_sql: '', nm_logradouro_completo: '(via OCR)',
+        qt_area_terreno: '', _from_ocr: true, _ocr_code: code
+      }, geometry: null
     }));
 
-    // Adiciona apenas os não-duplicados
     novosLotes.forEach(f => {
-      const key = f.properties._ocr_code;
-      if(!pendingLotes.find(x => x.properties._ocr_code === key))
+      if(!pendingLotes.find(x=>x.properties._ocr_code===f.properties._ocr_code))
         pendingLotes.push(f);
     });
 
     renderLotesBadge();
-    if(btn){ btn.textContent = `✅ ${codes.length} lote(s) lidos`; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },4000); }
-
-    // Ativa camada de lotes se não estiver
+    if(btn){ btn.textContent=`✅ ${codes.length} lote(s) lidos`; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },4000); }
     if(!_geoActive['lotes']) toggleGeoLayer('lotes');
 
   }catch(err){
     console.error('[OCR] erro:', err);
-    if(btn){ btn.textContent = '❌ Erro no OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
+    if(btn){ btn.textContent='❌ Erro no OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
     alert('Erro no OCR: ' + err.message + '\n\nTente "Selecionar Lotes" clicando individualmente no mapa.');
   }
 }
