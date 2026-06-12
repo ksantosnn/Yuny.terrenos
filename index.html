@@ -2083,13 +2083,35 @@ async function ocrLotesNoPoligono(pts){
   const minLat = Math.min(...lats)-pad, maxLat = Math.max(...lats)+pad;
   const minLng = Math.min(...lngs)-pad, maxLng = Math.max(...lngs)+pad;
 
-  const W = 1600, H = 1200;
-  const bbox = `${minLng},${minLat},${maxLng},${maxLat}`;
-  // Pede camada de lotes em branco (sem fundo de mapa) — só rótulos F são visíveis
-  const wmsUrl = `https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&SRS=EPSG:4326&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
+  // Converter para EPSG:3857 (Web Mercator) — o GeoSampa renderiza labels neste CRS
+  const toMerc = (lat, lng) => {
+    const x = lng * 20037508.34 / 180;
+    const y = Math.log(Math.tan((90+lat)*Math.PI/360)) / (Math.PI/180) * 20037508.34/180;
+    return [x, y];
+  };
+  const [xMin, yMin] = toMerc(minLat, minLng);
+  const [xMax, yMax] = toMerc(maxLat, maxLng);
 
-  // wsrv.nl: proxy de imagem gratuito que adiciona CORS headers
-  const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://', ''));
+  // Tamanho da imagem: limitar a max ~1600px mas garantir escala fina o suficiente
+  // Scale ~1:2000 → 0.528m/px; para SP, grau ≈ 111km, então 0.001° ≈ 111m
+  const bboxWm = xMax - xMin; // largura em metros
+  const bboxHm = yMax - yMin;
+  // Pixels necessários para escala 1:1500 (garantir labels visíveis)
+  const pxPerMeter = 1 / 0.396; // 0.396m/px ≈ escala 1:1500 a 96dpi
+  let W = Math.round(bboxWm * pxPerMeter);
+  let H = Math.round(bboxHm * pxPerMeter);
+  // Limitar a 1600px (servidor GeoSampa recusa imagens muito grandes)
+  if(W > 1600){ const s=1600/W; W=1600; H=Math.round(H*s); }
+  if(H > 1600){ const s=1600/H; H=1600; W=Math.round(W*s); }
+  W = Math.max(W,256); H = Math.max(H,256);
+
+  const bbox3857 = `${xMin.toFixed(2)},${yMin.toFixed(2)},${xMax.toFixed(2)},${yMax.toFixed(2)}`;
+  const wmsUrl = `https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox3857}&WIDTH=${W}&HEIGHT=${H}&FORMAT=image/png&SRS=EPSG:3857&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
+
+  // wsrv.nl: proxy de imagem com CORS + forçar PNG (sem compressão lossy)
+  const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://', '')) + '&output=png';
+  console.log('[OCR] WMS URL (3857):', `${W}x${H}`, bbox3857.slice(0,40));
+  console.log('[OCR] proxied:', proxied.slice(0,120));
 
   try{
     // Carregar imagem via proxy
@@ -2097,37 +2119,50 @@ async function ocrLotesNoPoligono(pts){
       const i = new Image();
       i.crossOrigin = 'anonymous';
       i.onload = () => res(i);
-      i.onerror = (e) => rej(new Error('Falha ao carregar imagem do mapa'));
+      i.onerror = () => rej(new Error('Falha ao carregar imagem via wsrv.nl'));
       i.src = proxied;
     });
 
     // Desenha no canvas
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
-    canvas.getContext('2d').drawImage(img, 0, 0);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+
+    // Pré-processamento: aumenta contraste para melhorar OCR
+    const imgData = ctx.getImageData(0, 0, W, H);
+    const d = imgData.data;
+    for(let i=0;i<d.length;i+=4){
+      const gray = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+      // Threshold agressivo: texto escuro (< 160) → preto; fundo claro → branco
+      const v = gray < 160 ? 0 : 255;
+      d[i]=d[i+1]=d[i+2]=v;
+    }
+    ctx.putImageData(imgData, 0, 0);
 
     if(btn) btn.textContent = '🔍 Lendo texto… 0%';
 
-    // OCR com Tesseract.js
+    // OCR com Tesseract.js — PSM 11 (texto esparso, bom para mapas)
     const result = await Tesseract.recognize(canvas, 'por', {
       logger: m => {
         if(m.status === 'recognizing text' && btn)
           btn.textContent = `🔍 Lendo… ${Math.round(m.progress*100)}%`;
-      }
+      },
+      tessedit_pageseg_mode: '11',
+      tessedit_char_whitelist: 'F0123456789 '
     });
 
     const rawText = result.data.text;
-    console.log('[OCR] texto bruto:', rawText.slice(0, 400));
+    console.log('[OCR] texto bruto:', rawText.slice(0, 600));
 
-    // Extrai códigos F: "F 0036", "F0036", "F036", variações OCR como "F O036"
-    // Normaliza: remove espaços/O/0 confusion
-    const normalized = rawText.replace(/F\s+O/g, 'F 0').replace(/F\s+o/g, 'F 0');
-    const matches = normalized.match(/F\s*0*([0-9]{3,4})/g) || [];
+    // Extrai códigos F: "F 0036", "F0036", "F036" — tolerante a OCR errors
+    const normalized = rawText
+      .replace(/[Oo]/g, '0')     // O/o → 0 (confusão OCR comum em números)
+      .replace(/[Il]/g, '1')     // I/l → 1
+      .replace(/\s+/g,' ');
+    const matches = normalized.match(/F\s*\d{3,4}/g) || [];
     const codes = [...new Set(
-      matches.map(s => {
-        const num = s.replace(/[^0-9]/g,'').padStart(4,'0');
-        return 'F' + num;
-      })
+      matches.map(s => 'F' + s.replace(/\D/g,'').padStart(4,'0'))
     )].sort();
 
     console.log('[OCR] códigos encontrados:', codes);
