@@ -1319,25 +1319,25 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 const GEO_WMS = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 const GEO_WMS_HTTP = 'http://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 async function geoFetch(url){
-  const short = url.slice(url.indexOf('?')+1, url.indexOf('?')+80);
-  // 1. Direct fetch
-  try{
-    const r = await fetch(url);
-    if(r.ok){ const d=await r.json(); console.log('[geo] direct OK feats='+d?.features?.length, short); return d; }
-    console.warn('[geo] direct status='+r.status, short);
-  }catch(e){ console.warn('[geo] direct err='+e.message, short); }
-  // 2. corsproxy.io (sem encode)
-  try{
-    const r = await fetch('https://corsproxy.io/?' + url);
-    if(r.ok){ const d=await r.json(); console.log('[geo] corsproxy OK feats='+d?.features?.length, short); return d; }
-    console.warn('[geo] corsproxy status='+r.status, short);
-  }catch(e){ console.warn('[geo] corsproxy err='+e.message, short); }
-  // 3. corsproxy.io (com encode)
-  try{
-    const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
-    if(r.ok){ const d=await r.json(); console.log('[geo] corsproxy-enc OK feats='+d?.features?.length, short); return d; }
-    console.warn('[geo] corsproxy-enc status='+r.status, short);
-  }catch(e){ console.warn('[geo] corsproxy-enc err='+e.message, short); }
+  const enc = encodeURIComponent(url);
+  const short = url.slice(url.indexOf('?')+1, url.indexOf('?')+60);
+  const proxies = [
+    ['direct',      () => fetch(url)],
+    ['corsproxy',   () => fetch('https://corsproxy.io/?url=' + enc)],
+    ['allorigins',  () => fetch('https://api.allorigins.win/raw?url=' + enc)],
+    ['thingproxy',  () => fetch('https://thingproxy.freeboard.io/fetch/' + url)],
+  ];
+  for(const [name, fn] of proxies){
+    try{
+      const r = await fn();
+      if(r.ok){
+        const d = await r.json();
+        console.log('[geo] '+name+' OK feats='+(d?.features?.length??'?'), short);
+        return d;
+      }
+      console.warn('[geo] '+name+' status='+r.status, short);
+    }catch(e){ console.warn('[geo] '+name+' err='+e.message.slice(0,40), short); }
+  }
   console.error('[geo] ALL FAILED', short);
   throw new Error('geoFetch: all methods failed');
 }
@@ -1964,16 +1964,9 @@ function pointInPoly(lat, lng, pts){
 
 async function onSelectLoteClick(e){
   if(!_selectingLotes) return;
-  const bounds = map.getBounds();
-  const size   = map.getSize();
-  const pt     = map.latLngToContainerPoint(e.latlng);
-  const bbox   = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
-  const url    = `${GEO_WMS}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo` +
-    `&LAYERS=geoportal:lote_cidadao&QUERY_LAYERS=geoportal:lote_cidadao` +
-    `&INFO_FORMAT=application/json` +
-    `&BBOX=${bbox}&WIDTH=${size.x}&HEIGHT=${size.y}` +
-    `&X=${Math.round(pt.x)}&Y=${Math.round(pt.y)}` +
-    `&FEATURE_COUNT=3&SRS=EPSG:4326`;
+  const lat = e.latlng.lat, lng = e.latlng.lng;
+  const WFS = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wfs';
+  const url = `${WFS}?service=WFS&version=2.0.0&request=GetFeature&typeName=geoportal:lote_cidadao&outputFormat=application/json&count=3&CQL_FILTER=INTERSECTS(ge_poligono,POINT(${lng} ${lat}))`;
   updateSelectionBar('⏳ Buscando lote…');
   try{
     const data = await geoFetch(url);
@@ -1986,7 +1979,7 @@ async function onSelectLoteClick(e){
     if(feats.length===0) updateSelectionBar('⚠️ Nenhum lote nesse ponto — tente outro');
     else updateSelectionBar();
   }catch(e2){
-    updateSelectionBar('❌ Erro ao buscar — tente novamente');
+    updateSelectionBar('❌ Erro — tente novamente');
   }
   setTimeout(updateSelectionBar, 3000);
 }
