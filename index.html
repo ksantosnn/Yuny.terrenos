@@ -1763,7 +1763,7 @@ function openModal(id, viewMode=false){
 function closeModal(){
   document.getElementById('modal-bg').classList.remove('active');
   if(drawingActive) cancelDraw();
-  if(_selectingLotes){ _selectingLotes=false; map.off('click',onSelectLoteClick); map.getContainer().style.cursor=''; }
+  if(_selectingLotes){ finishSelectLotes(); }
   editingId = null;
   pendingPolygons = [];
   pendingLotes = [];
@@ -1964,7 +1964,6 @@ function pointInPoly(lat, lng, pts){
 
 async function onSelectLoteClick(e){
   if(!_selectingLotes) return;
-  L.DomEvent.stop(e);
   const bounds = map.getBounds();
   const size   = map.getSize();
   const pt     = map.latLngToContainerPoint(e.latlng);
@@ -1975,8 +1974,7 @@ async function onSelectLoteClick(e){
     `&BBOX=${bbox}&WIDTH=${size.x}&HEIGHT=${size.y}` +
     `&X=${Math.round(pt.x)}&Y=${Math.round(pt.y)}` +
     `&FEATURE_COUNT=3&SRS=EPSG:4326`;
-  const btn = document.getElementById('btn-select-lotes');
-  if(btn) btn.textContent = '⏳ Buscando…';
+  updateSelectionBar('⏳ Buscando lote…');
   try{
     const data = await geoFetch(url);
     const feats = data?.features||[];
@@ -1985,38 +1983,70 @@ async function onSelectLoteClick(e){
       if(key!=='—' && !pendingLotes.find(x=>fmtSQLprops(x.properties)===key))
         pendingLotes.push(f);
     });
-    if(feats.length===0 && btn) btn.textContent = '⚠️ Lote não encontrado — tente outro ponto';
-    else renderLotesBadge();
+    if(feats.length===0) updateSelectionBar('⚠️ Nenhum lote nesse ponto — tente outro');
+    else updateSelectionBar();
   }catch(e2){
-    if(btn) btn.textContent = '❌ Erro';
+    updateSelectionBar('❌ Erro ao buscar — tente novamente');
   }
-  setTimeout(renderLotesBadge, 2500);
+  setTimeout(updateSelectionBar, 3000);
 }
 
 function toggleSelectLotes(){
-  _selectingLotes = !_selectingLotes;
-  if(_selectingLotes){
-    map.on('click', onSelectLoteClick);
-    map.getContainer().style.cursor = 'crosshair';
-    if(!_geoActive['lotes']) toggleGeoLayer('lotes');
-  } else {
-    map.off('click', onSelectLoteClick);
-    map.getContainer().style.cursor = '';
+  _selectingLotes = true;
+  // Esconde o modal para liberar o mapa
+  document.getElementById('modal-bg').style.visibility = 'hidden';
+  if(!_geoActive['lotes']) toggleGeoLayer('lotes');
+  map.on('click', onSelectLoteClick);
+  map.getContainer().style.cursor = 'crosshair';
+  showSelectionBar();
+}
+
+function showSelectionBar(){
+  let bar = document.getElementById('sel-bar');
+  if(!bar){
+    bar = document.createElement('div');
+    bar.id = 'sel-bar';
+    bar.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99999;background:#1a1a1a;color:#fff;padding:10px 18px;border-radius:12px;display:flex;align-items:center;gap:12px;font-family:var(--sans);font-size:13px;box-shadow:0 4px 24px rgba(0,0,0,.4);white-space:nowrap';
+    bar.innerHTML = `<span id="sel-bar-label">🎯 Clique nos lotes no mapa</span>
+      <button onclick="finishSelectLotes()" style="background:var(--accent);border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:600">✓ Concluir</button>
+      <button onclick="cancelSelectLotes()" style="background:none;border:1px solid #555;color:#ccc;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:13px">Cancelar</button>`;
+    document.body.appendChild(bar);
   }
+  bar.style.display = 'flex';
+  updateSelectionBar();
+}
+
+function updateSelectionBar(msg){
+  const label = document.getElementById('sel-bar-label');
+  if(!label) return;
+  if(msg){ label.textContent = msg; return; }
+  const n = pendingLotes.length;
+  label.textContent = n
+    ? `✅ ${n} lote${n>1?'s':''} selecionado${n>1?'s':''} — continue clicando`
+    : '🎯 Clique nos lotes no mapa';
+}
+
+function finishSelectLotes(){
+  _selectingLotes = false;
+  map.off('click', onSelectLoteClick);
+  map.getContainer().style.cursor = '';
+  document.getElementById('modal-bg').style.visibility = '';
+  const bar = document.getElementById('sel-bar');
+  if(bar) bar.style.display = 'none';
   renderLotesBadge();
+}
+
+function cancelSelectLotes(){
+  pendingLotes = [];
+  finishSelectLotes();
 }
 
 function renderLotesBadge(){
   const btn = document.getElementById('btn-select-lotes');
   if(!btn) return;
   const n = pendingLotes.length;
-  if(_selectingLotes){
-    btn.textContent = `🎯 Selecionando${n?` (${n} lote${n>1?'s':''})`:' — clique nos lotes'}`;
-    btn.style.background = '#2C2C2C';
-  } else {
-    btn.textContent = `🖱️ Selecionar Lotes${n?` (${n})` : ''}`;
-    btn.style.background = '';
-  }
+  btn.textContent = `🖱️ Selecionar Lotes${n?' ('+n+')':''}`;
+  btn.style.background = '';
   const clearBtn = document.getElementById('btn-clear-lotes');
   if(clearBtn) clearBtn.style.display = n ? '' : 'none';
 }
