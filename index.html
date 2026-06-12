@@ -800,7 +800,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
-  <script src="https://unpkg.com/tesseract.js@v4.0.2/dist/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -1094,9 +1093,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
         <div style="display:flex;gap:8px;margin-top:6px;">
           <button class="btn-draw-poly" id="btn-select-lotes" style="flex:1;margin-top:0" onclick="toggleSelectLotes()">🖱️ Selecionar Lotes</button>
           <button id="btn-clear-lotes" onclick="clearSelectedLotes()" style="display:none;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--muted);white-space:nowrap">✕ Limpar</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="btn-draw-poly" id="btn-ocr-lotes" style="flex:1;margin-top:0;background:var(--bg);border:1px solid var(--border);color:var(--text)" onclick="ocrLotesClick()">🔍 Ler Lotes (OCR)</button>
         </div>
       </div>
       <div class="field"><label>Observações / Follow Up</label><textarea id="f-obs"></textarea></div>
@@ -2060,168 +2056,6 @@ function clearSelectedLotes(){
   renderLotesBadge();
 }
 
-async function ocrLotesClick(){
-  // Precisa de polígono
-  let pts = pendingPolygons[0];
-  if(!pts && editingId){
-    const t = db_local.find(x=>x.id===editingId);
-    if(t?.polygon) pts = t.polygon;
-  }
-  if(!pts || pts.length < 3){
-    alert('Desenhe um polígono primeiro para usar o OCR.');
-    return;
-  }
-  await ocrLotesNoPoligono(pts);
-}
-
-async function ocrLotesNoPoligono(pts){
-  const btn = document.getElementById('btn-ocr-lotes');
-  if(btn) btn.textContent = '⏳ Preparando tiles…';
-
-  const lats = pts.map(p=>p[0]), lngs = pts.map(p=>p[1]);
-  const pad = 0.0002;
-  const minLat = Math.min(...lats)-pad, maxLat = Math.max(...lats)+pad;
-  const minLng = Math.min(...lngs)-pad, maxLng = Math.max(...lngs)+pad;
-
-  // Usa o mesmo zoom do mapa atual (cap 18) — mesmos tiles que o Leaflet renderiza
-  const zoom = Math.min(Math.max(Math.round(map.getZoom()), 15), 18);
-
-  // lat/lng → tile index (XYZ / Web Mercator)
-  const lngToTX = (lng, z) => Math.floor((lng+180)/360 * Math.pow(2,z));
-  const latToTY = (lat, z) => {
-    const r = lat * Math.PI/180;
-    return Math.floor((1 - Math.log(Math.tan(r)+1/Math.cos(r))/Math.PI)/2 * Math.pow(2,z));
-  };
-  // tile index → EPSG:3857 bbox
-  const tileToMerc = (tx,ty,z) => {
-    const n = Math.pow(2,z), W = 20037508.34*2;
-    return [
-      tx/n*W - 20037508.34,
-      20037508.34 - (ty+1)/n*W,
-      (tx+1)/n*W - 20037508.34,
-      20037508.34 - ty/n*W
-    ];
-  };
-
-  const txMin = lngToTX(minLng, zoom), txMax = lngToTX(maxLng, zoom);
-  const tyMin = latToTY(maxLat, zoom), tyMax = latToTY(minLat, zoom);
-  const cols = txMax - txMin + 1, rows = tyMax - tyMin + 1;
-  const totalTiles = cols * rows;
-
-  if(totalTiles > 25){
-    if(btn){ btn.textContent = '⚠️ Área muito grande para OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
-    alert('Polígono cobre muitos tiles (' + totalTiles + '). Reduza a área ou use "Selecionar Lotes" manualmente.');
-    return;
-  }
-
-  console.log(`[OCR] zoom=${zoom} tiles=${cols}×${rows}=${totalTiles}`);
-
-  // Monta canvas costurado com todos os tiles
-  const TS = 256; // tile size
-  const canvas = document.createElement('canvas');
-  canvas.width = cols * TS; canvas.height = rows * TS;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const WMS_BASE = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
-
-  let loaded = 0;
-  const fetchTile = (tx, ty) => {
-    const [xMin,yMin,xMax,yMax] = tileToMerc(tx, ty, zoom);
-    const bbox = `${xMin.toFixed(2)},${yMin.toFixed(2)},${xMax.toFixed(2)},${yMax.toFixed(2)}`;
-    const wmsUrl = `${WMS_BASE}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&LAYERS=geoportal:lote_cidadao&STYLES=&BBOX=${bbox}&WIDTH=${TS}&HEIGHT=${TS}&FORMAT=image/png&SRS=EPSG:3857&TRANSPARENT=FALSE&BGCOLOR=0xFFFFFF`;
-    const proxied = 'https://images.weserv.nl/?url=' + encodeURIComponent(wmsUrl.replace('https://','')) + '&output=png';
-    const col = tx - txMin, row = ty - tyMin;
-    return new Promise(resolve => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.drawImage(img, col*TS, row*TS, TS, TS);
-        loaded++;
-        if(btn) btn.textContent = `⏳ Tiles ${loaded}/${totalTiles}…`;
-        resolve();
-      };
-      img.onerror = () => { loaded++; resolve(); };
-      img.src = proxied;
-    });
-  };
-
-  try{
-    // Carrega todos os tiles em paralelo
-    const promises = [];
-    for(let ty=tyMin; ty<=tyMax; ty++)
-      for(let tx=txMin; tx<=txMax; tx++)
-        promises.push(fetchTile(tx, ty));
-    await Promise.all(promises);
-
-    if(btn) btn.textContent = '🔍 Aplicando OCR…';
-
-    // Pré-processamento: alto contraste → facilita Tesseract em mapas
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const d = imgData.data;
-    for(let i=0;i<d.length;i+=4){
-      const gray = 0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
-      const v = gray < 140 ? 0 : 255;
-      d[i]=d[i+1]=d[i+2]=v;
-    }
-    ctx.putImageData(imgData, 0, 0);
-
-    if(btn) btn.textContent = '🔍 Lendo… 0%';
-
-    const result = await Tesseract.recognize(canvas, 'por', {
-      logger: m => {
-        if(m.status==='recognizing text' && btn)
-          btn.textContent = `🔍 Lendo… ${Math.round(m.progress*100)}%`;
-      },
-      tessedit_pageseg_mode: '11',
-      tessedit_char_whitelist: 'F0123456789 '
-    });
-
-    const rawText = result.data.text;
-    console.log('[OCR] texto bruto:', rawText.slice(0,600));
-
-    const normalized = rawText.replace(/[Oo]/g,'0').replace(/[Il]/g,'1').replace(/\s+/g,' ');
-    const matches = normalized.match(/F\s*\d{3,4}/g) || [];
-    const codes = [...new Set(matches.map(s=>'F'+s.replace(/\D/g,'').padStart(4,'0')))].sort();
-    console.log('[OCR] códigos encontrados:', codes);
-
-    if(codes.length === 0){
-      if(btn){ btn.textContent='⚠️ Nenhum F encontrado'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
-      alert('OCR não encontrou códigos F na área. Verifique se a camada de Lotes está ativa e tente "Selecionar Lotes" manualmente.');
-      return;
-    }
-
-    const setor  = (document.getElementById('f-setor')?.value||'').trim();
-    const quadra = (document.getElementById('f-quadra')?.value||'').trim();
-
-    const novosLotes = codes.map(code => ({
-      type: 'Feature',
-      properties: {
-        cd_lote: code.replace('F','').padStart(4,'0'),
-        cd_setor_fiscal: setor, cd_quadra_fiscal: quadra,
-        cd_digito_sql: '', nm_logradouro_completo: '(via OCR)',
-        qt_area_terreno: '', _from_ocr: true, _ocr_code: code
-      }, geometry: null
-    }));
-
-    novosLotes.forEach(f => {
-      if(!pendingLotes.find(x=>x.properties._ocr_code===f.properties._ocr_code))
-        pendingLotes.push(f);
-    });
-
-    renderLotesBadge();
-    if(btn){ btn.textContent=`✅ ${codes.length} lote(s) lidos`; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },4000); }
-    if(!_geoActive['lotes']) toggleGeoLayer('lotes');
-
-  }catch(err){
-    console.error('[OCR] erro:', err);
-    if(btn){ btn.textContent='❌ Erro no OCR'; setTimeout(()=>{ btn.textContent='🔍 Ler Lotes (OCR)'; },3000); }
-    alert('Erro no OCR: ' + err.message + '\n\nTente "Selecionar Lotes" clicando individualmente no mapa.');
-  }
-}
-
-
 async function buscarLotesPoligono(pts){
   if(!pts || pts.length < 3){ pendingLotes = []; _lotesDebug='pts<3'; return; }
   if(!_geoActive['lotes']) toggleGeoLayer('lotes');
@@ -2315,11 +2149,6 @@ async function gerarFicha(){
   let lotesAll = pendingLotes.length ? pendingLotes : [];
   if(!lotesAll.length) await buscarLotesPoligono(pts);
   lotesAll = pendingLotes;
-  // Se WFS falhou (0 lotes), tenta OCR automaticamente
-  if(!lotesAll.length && pts && pts.length >= 3){
-    content.innerHTML = '<div class="ficha-loading">🔍 WFS indisponível — tentando leitura OCR do mapa…</div>';
-    try{ await ocrLotesNoPoligono(pts); lotesAll = pendingLotes; }catch(e){}
-  }
 
   // Parâmetros LPUOS
   const zCode = zona?.cd_zoneamento_perimetro || lote?.cd_tipo_uso_imovel || '—';
@@ -2449,7 +2278,7 @@ async function gerarFicha(){
   </div>
 
   <div class="ficha-section">
-    ${lotesAll.length === 0 ? `<div style="font-size:12px;color:#f59e0b;padding:8px 12px;background:#fffbeb;border-radius:6px;margin-bottom:8px">⚠️ Lotes não encontrados automaticamente. Use <b>🔍 Ler Lotes (OCR)</b> ou <b>🖱️ Selecionar Lotes</b> antes de gerar a ficha.</div>` : ''}
+    ${lotesAll.length === 0 ? `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Nenhum lote encontrado. Use <b>🖱️ Selecionar Lotes</b> para adicionar manualmente.</div>` : ''}
     <div class="ficha-section-title">Lotes no Polígono${lotesAll.length ? ' ('+lotesAll.length+')' : ''}</div>
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead>
