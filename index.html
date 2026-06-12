@@ -1090,6 +1090,10 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
           <button class="btn-draw-poly" style="flex:1;margin-top:0" onclick="startDrawMode()">✏️ Adicionar polígono</button>
           <button class="btn-draw-poly" id="btn-adjust-poly" style="flex:1;margin-top:0;display:none" onclick="startAdjustMode()">🔧 Ajustar polígono</button>
         </div>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button class="btn-draw-poly" id="btn-select-lotes" style="flex:1;margin-top:0" onclick="toggleSelectLotes()">🖱️ Selecionar Lotes</button>
+          <button id="btn-clear-lotes" onclick="clearSelectedLotes()" style="display:none;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--muted);white-space:nowrap">✕ Limpar</button>
+        </div>
       </div>
       <div class="field"><label>Observações / Follow Up</label><textarea id="f-obs"></textarea></div>
 
@@ -1290,6 +1294,17 @@ let drawingActive = false;
 let pendingPolygons = []; // lista de polígonos (suporte a múltiplos)
 let pendingLotes    = []; // lotes GeoSampa intersectando o polígono (cache)
 let _lotesDebug    = ''; // diagnóstico da última busca
+let _selectingLotes = false; // modo de seleção manual de lotes
+
+function fmtSQLprops(p){
+  if(!p) return '—';
+  const s=(p.cd_setor_fiscal||'').trim().padStart(3,'0');
+  const q=(p.cd_quadra_fiscal||'').trim().padStart(3,'0');
+  const l=(p.cd_lote||'').trim().padStart(4,'0');
+  const d=(p.cd_digito_sql||'').trim();
+  if(!s||!q||!l) return '—';
+  return d?`${s}.${q}.${l}-${d}`:`${s}.${q}.${l}`;
+}
 let geocodeQueue = [];
 let geocoding = false;
 
@@ -1304,21 +1319,26 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
 const GEO_WMS = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 const GEO_WMS_HTTP = 'http://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wms';
 async function geoFetch(url){
-  // 1. Direct fetch (works via https://)
+  const short = url.slice(url.indexOf('?')+1, url.indexOf('?')+80);
+  // 1. Direct fetch
   try{
     const r = await fetch(url);
-    if(r.ok) return r.json();
-  }catch(e){}
-  // 2. corsproxy.io
+    if(r.ok){ const d=await r.json(); console.log('[geo] direct OK feats='+d?.features?.length, short); return d; }
+    console.warn('[geo] direct status='+r.status, short);
+  }catch(e){ console.warn('[geo] direct err='+e.message, short); }
+  // 2. corsproxy.io (sem encode)
+  try{
+    const r = await fetch('https://corsproxy.io/?' + url);
+    if(r.ok){ const d=await r.json(); console.log('[geo] corsproxy OK feats='+d?.features?.length, short); return d; }
+    console.warn('[geo] corsproxy status='+r.status, short);
+  }catch(e){ console.warn('[geo] corsproxy err='+e.message, short); }
+  // 3. corsproxy.io (com encode)
   try{
     const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
-    if(r.ok) return r.json();
-  }catch(e){}
-  // 3. allorigins
-  try{
-    const r = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(url));
-    if(r.ok) return r.json();
-  }catch(e){}
+    if(r.ok){ const d=await r.json(); console.log('[geo] corsproxy-enc OK feats='+d?.features?.length, short); return d; }
+    console.warn('[geo] corsproxy-enc status='+r.status, short);
+  }catch(e){ console.warn('[geo] corsproxy-enc err='+e.message, short); }
+  console.error('[geo] ALL FAILED', short);
   throw new Error('geoFetch: all methods failed');
 }
 const _geoLayers = {
@@ -1678,6 +1698,10 @@ function setModalViewMode(isView){
   const _sq=(sel,v)=>{const e=document.querySelector(sel);if(e)e.style.display=v;};
   _s('btn-relocalizar', isView?'none':'');
   _sq('.btn-draw-poly', isView?'none':'');
+  const selBtn=document.getElementById('btn-select-lotes');
+  if(selBtn) selBtn.style.display=isView?'none':'';
+  const clrBtn=document.getElementById('btn-clear-lotes');
+  if(clrBtn) clrBtn.style.display='none';
   _s('btn-todo-add',    isView?'none':'');
   _s('modal-todo-input',isView?'none':'');
   // Footer buttons
@@ -1739,6 +1763,7 @@ function openModal(id, viewMode=false){
 function closeModal(){
   document.getElementById('modal-bg').classList.remove('active');
   if(drawingActive) cancelDraw();
+  if(_selectingLotes){ _selectingLotes=false; map.off('click',onSelectLoteClick); map.getContainer().style.cursor=''; }
   editingId = null;
   pendingPolygons = [];
   pendingLotes = [];
@@ -1935,6 +1960,70 @@ function pointInPoly(lat, lng, pts){
     if(((yi>lat)!==(yj>lat))&&(lng<(xj-xi)*(lat-yi)/(yj-yi)+xi)) inside=!inside;
   }
   return inside;
+}
+
+async function onSelectLoteClick(e){
+  if(!_selectingLotes) return;
+  L.DomEvent.stop(e);
+  const bounds = map.getBounds();
+  const size   = map.getSize();
+  const pt     = map.latLngToContainerPoint(e.latlng);
+  const bbox   = `${bounds.getWest()},${bounds.getSouth()},${bounds.getEast()},${bounds.getNorth()}`;
+  const url    = `${GEO_WMS}?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo` +
+    `&LAYERS=geoportal:lote_cidadao&QUERY_LAYERS=geoportal:lote_cidadao` +
+    `&INFO_FORMAT=application/json` +
+    `&BBOX=${bbox}&WIDTH=${size.x}&HEIGHT=${size.y}` +
+    `&X=${Math.round(pt.x)}&Y=${Math.round(pt.y)}` +
+    `&FEATURE_COUNT=3&SRS=EPSG:4326`;
+  const btn = document.getElementById('btn-select-lotes');
+  if(btn) btn.textContent = '⏳ Buscando…';
+  try{
+    const data = await geoFetch(url);
+    const feats = data?.features||[];
+    feats.forEach(f=>{
+      const key = fmtSQLprops(f.properties);
+      if(key!=='—' && !pendingLotes.find(x=>fmtSQLprops(x.properties)===key))
+        pendingLotes.push(f);
+    });
+    if(feats.length===0 && btn) btn.textContent = '⚠️ Lote não encontrado — tente outro ponto';
+    else renderLotesBadge();
+  }catch(e2){
+    if(btn) btn.textContent = '❌ Erro';
+  }
+  setTimeout(renderLotesBadge, 2500);
+}
+
+function toggleSelectLotes(){
+  _selectingLotes = !_selectingLotes;
+  if(_selectingLotes){
+    map.on('click', onSelectLoteClick);
+    map.getContainer().style.cursor = 'crosshair';
+    if(!_geoActive['lotes']) toggleGeoLayer('lotes');
+  } else {
+    map.off('click', onSelectLoteClick);
+    map.getContainer().style.cursor = '';
+  }
+  renderLotesBadge();
+}
+
+function renderLotesBadge(){
+  const btn = document.getElementById('btn-select-lotes');
+  if(!btn) return;
+  const n = pendingLotes.length;
+  if(_selectingLotes){
+    btn.textContent = `🎯 Selecionando${n?` (${n} lote${n>1?'s':''})`:' — clique nos lotes'}`;
+    btn.style.background = '#2C2C2C';
+  } else {
+    btn.textContent = `🖱️ Selecionar Lotes${n?` (${n})` : ''}`;
+    btn.style.background = '';
+  }
+  const clearBtn = document.getElementById('btn-clear-lotes');
+  if(clearBtn) clearBtn.style.display = n ? '' : 'none';
+}
+
+function clearSelectedLotes(){
+  pendingLotes = [];
+  renderLotesBadge();
 }
 
 async function buscarLotesPoligono(pts){
