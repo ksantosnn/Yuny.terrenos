@@ -2206,14 +2206,23 @@ async function buscarLotesPoligono(pts){
     _lotesDebug = `bbox ${clat.toFixed(5)},${clng.toFixed(5)} | total bbox: ${allFeatures.length}`;
 
     // Filtrar client-side: manter lotes cujo centróide está dentro do polígono
+    // WFS 1.1.0 pode retornar [lat,lng] (OGC) ou [lng,lat] (GeoJSON) — detecta pela posição de SP
+    const polyLatC = (minLat+maxLat)/2, polyLngC = (minLng+maxLng)/2;
     pendingLotes = allFeatures.filter(f=>{
       const geom = f.geometry;
       if(!geom) return false;
       const ring = geom.type==='Polygon' ? geom.coordinates[0]
                  : geom.type==='MultiPolygon' ? geom.coordinates[0][0] : null;
       if(!ring) return false;
-      const cLng = ring.reduce((s,c)=>s+c[0],0)/ring.length;
-      const cLat = ring.reduce((s,c)=>s+c[1],0)/ring.length;
+      const avg0 = ring.reduce((s,c)=>s+c[0],0)/ring.length;
+      const avg1 = ring.reduce((s,c)=>s+c[1],0)/ring.length;
+      // Detecta ordem dos eixos: qual avg está mais próximo da lat do polígono?
+      let cLat, cLng;
+      if(Math.abs(avg0-polyLatC) < Math.abs(avg0-polyLngC)){
+        cLat=avg0; cLng=avg1; // [lat,lng] — ordem WFS 1.1.0 geográfica
+      } else {
+        cLat=avg1; cLng=avg0; // [lng,lat] — ordem GeoJSON padrão
+      }
       return pointInPoly(cLat, cLng, pts);
     });
     _lotesDebug += ` | dentro do polígono: ${pendingLotes.length}`;
