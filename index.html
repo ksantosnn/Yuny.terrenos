@@ -2605,6 +2605,7 @@ function selectCard(id){
   renderList();
   const t=terrenos.find(x=>x.id===id);
   if(!t) return;
+  openModal(id, true);
   if(layers[id]){
     const layer=Array.isArray(layers[id])?layers[id][0]:layers[id];
     if(t.polygons&&t.polygons.length){
