@@ -526,6 +526,23 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 .dash-mes-item-meta { color:var(--muted); }
 .dash-mes-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; }
 
+
+/* ── MODAL ATA OVERLAY ── */
+#ata-modal-overlay {
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;
+  backdrop-filter:blur(2px);
+}
+#ata-modal-overlay.open { display:block; }
+
+
+.ata-modal-close {
+  position:sticky;top:0;float:right;z-index:10;
+  background:#f3f4f6;border:none;border-radius:20px;
+  padding:4px 12px;cursor:pointer;font-size:18px;line-height:1;
+  color:#6b7280;margin-bottom:8px;
+}
+.ata-modal-close:hover { background:#e5e7eb; }
+
 /* Dashboard filters */
 .dash-filters {
   display:flex; flex-wrap:wrap; gap:12px; align-items:center;
@@ -572,6 +589,22 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
   background:var(--surface); margin-top:4px;
 }
 .dash-ata-panel.open { display:block; }
+
+.dash-ata-panel.modal-open .ata-close-x { display:inline-block !important; }
+.dash-ata-panel.modal-open {
+  position:fixed !important;
+  top:50% !important; left:50% !important;
+  transform:translate(-50%,-50%) !important;
+  z-index:1000 !important;
+  width:min(860px,92vw) !important;
+  max-height:88vh !important;
+  overflow-y:auto !important;
+  background:#fff !important;
+  border-radius:14px !important;
+  box-shadow:0 24px 64px rgba(0,0,0,.3) !important;
+  padding:24px 28px !important;
+}
+
 .dash-ata-entry { padding:8px 0; border-bottom:1px solid var(--border); font-size:12px; font-family:var(--mono); }
 .dash-ata-entry:last-child { border-bottom:none; }
 .dash-ata-entry-date { font-weight:600; color:var(--accent); margin-bottom:2px; }
@@ -591,6 +624,7 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
   font-size:12px; font-family:var(--mono); padding:8px 10px;
   border:1px solid var(--border); border-radius:6px; background:var(--bg);
   color:var(--text); outline:none; resize:vertical; line-height:1.5;
+  width:100%; box-sizing:border-box;
 }
 .dash-ata-textarea:focus { border-color:var(--accent); }
 .dash-ata-save-btn {
@@ -600,6 +634,10 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 }
 .dash-ata-save-btn:hover { opacity:.85; }
 .dash-ata-save-btn:disabled { opacity:.6; cursor:default; }
+.dash-ata-inline-wrap { margin-top:12px; }
+.dash-ata-live-list { max-height:200px; overflow-y:auto; margin-bottom:10px; }
+.dash-ata-live-list .dash-ata-entry { padding:6px 0; border-bottom:1px solid var(--border); }
+.dash-ata-live-list .dash-ata-entry:last-child { border-bottom:none; }
 .dash-info-chip { display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:2px 8px;border-radius:20px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--mono); }
 .dash-todo-item { display:flex;align-items:flex-start;gap:6px;padding:5px 0;font-size:12px;font-family:var(--mono);line-height:1.4; }
 .dash-todo-item.done .dash-todo-texto { text-decoration:line-through;color:var(--muted); }
@@ -802,12 +840,14 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 </head>
 <body>
+<div id="ata-modal-wrap" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;width:min(860px,92vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.3);padding:24px 28px;"></div>
+<div id="ata-modal-overlay" onclick="closeAtaModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;backdrop-filter:blur(2px);"></div>
 
 <header>
   <h1>📍 Terrenos SP — Yuny</h1>
   <div class="tab-nav">
     <button class="tab-btn active" id="tab-mapa" onclick="switchTab('mapa')">🗺 Mapa</button>
-    <button class="tab-btn" id="tab-dash" onclick="switchTab('dash')">📊 Dashboard</button>
+    <button class="tab-btn" id="tab-dash" onclick="switchTab('dash')">📊 Painel</button>
   </div>
   <span class="badge-count" id="header-count">0 terrenos</span>
 </header>
@@ -933,29 +973,9 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
     <div class="dash-ata-grid" id="dash-ata-list"></div>
   </div>
 
-  <!-- Charts row -->
-  <div class="dash-charts">
-    <div class="dash-card">
-      <div class="dash-card-title">Terrenos por Status</div>
-      <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
-    </div>
-    <div class="dash-card">
-      <div class="dash-card-title">Evolução Mensal (recebimentos)</div>
-      <div class="chart-wrap-tall"><canvas id="chart-mensal"></canvas></div>
-    </div>
-  </div>
 
-  <!-- Terrenos do mês -->
-  <div class="dash-mes">
-    <div class="dash-mes-header">
-      <div>
-        <div class="dash-card-title" style="margin-bottom:2px" id="dash-mes-titulo">Terrenos Estudados em —</div>
-        <div class="dash-mes-label">recebidos no mês atual</div>
-      </div>
-      <div class="dash-mes-count" id="dash-mes-count">0</div>
-    </div>
-    <div class="dash-mes-list" id="dash-mes-list"></div>
-  </div>
+
+
 
 </div>
 
@@ -1043,7 +1063,12 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
       </div>
       <div class="field-row">
         <div class="field"><label>Bairro</label><input type="text" id="f-bairro"></div>
-        <div class="field"><label>Área</label><input type="text" id="f-area" placeholder="1.500 m²"></div>
+        <div class="field"><label>Área
+  <button type="button" id="btn-buscar-area" onclick="buscarAreaLotes()"
+    style="margin-left:8px;font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid #00B0BA44;background:#f0fafa;color:#00B0BA;cursor:pointer;font-weight:600;">
+    🔍 Buscar no GeoSampa
+  </button>
+</label><input type="text" id="f-area" placeholder="1.500 m²"></div>
       </div>
       <div class="field-row">
         <div class="field"><label>Corretor *</label><input type="text" id="f-corretor" list="corretores-list"><datalist id="corretores-list"></datalist></div>
@@ -1058,6 +1083,11 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
       <div class="field-row">
         <div class="field"><label>Setor</label><input type="text" id="f-setor" placeholder="ex: Consolação"></div>
         <div class="field"><label>Quadra</label><input type="text" id="f-quadra" placeholder="ex: Q12"></div>
+      </div>
+      <div class="field">
+        <label>Lotes (SQL)</label>
+        <div id="f-lotes-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
+        <button type="button" onclick="addLoteInput()" style="font-size:12px;padding:5px 14px;border-radius:6px;border:1px dashed var(--accent);background:none;color:var(--accent);cursor:pointer;font-family:var(--sans);">+ Adicionar lote</button>
       </div>
       <div class="field-row">
         <div class="field">
@@ -1089,10 +1119,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="btn-draw-poly" style="flex:1;margin-top:0" onclick="startDrawMode()">✏️ Adicionar polígono</button>
           <button class="btn-draw-poly" id="btn-adjust-poly" style="flex:1;margin-top:0;display:none" onclick="startAdjustMode()">🔧 Ajustar polígono</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <button class="btn-draw-poly" id="btn-select-lotes" style="flex:1;margin-top:0" onclick="toggleSelectLotes()">🖱️ Selecionar Lotes</button>
-          <button id="btn-clear-lotes" onclick="clearSelectedLotes()" style="display:none;padding:9px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:12px;color:var(--muted);white-space:nowrap">✕ Limpar</button>
         </div>
       </div>
       <div class="field"><label>Observações / Follow Up</label><textarea id="f-obs"></textarea></div>
@@ -1733,9 +1759,11 @@ function openModal(id, viewMode=false){
   document.getElementById('f-zone').value     = t?.zoneamento||'';
   document.getElementById('f-setor').value    = t?.setor||'';
   document.getElementById('f-quadra').value   = t?.quadra||'';
+  setLotesInForm(t?.lotes||[]);
   document.getElementById('f-status').value   = t?.status||'5.Frio';
   document.getElementById('f-data').value     = t?.data||new Date().toISOString().split('T')[0];
   document.getElementById('f-obs').value      = obsRecentes(t?.obs, 5);
+  setLotesInForm(t?.lotes||[]);
   // Responsável — popular select com EQUIPE
   const selResp = document.getElementById('f-responsavel');
   selResp.innerHTML = '<option value="">— Sem responsável —</option>' +
@@ -1776,6 +1804,34 @@ function closeModal(){
   pendingLotes = [];
 }
 
+
+function addLoteInput(val=''){
+  const list = document.getElementById('f-lotes-list');
+  if(!list) return;
+  const idx = list.children.length;
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;';
+  row.innerHTML = `<input type="text" class="f-lote-sql" value="${val}"
+    placeholder="ex: 045.105.0036-1"
+    style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--mono);background:var(--surface);color:var(--text);">
+    <button type="button" onclick="this.parentElement.remove()"
+      style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:none;cursor:pointer;color:var(--muted);font-size:13px;">✕</button>`;
+  list.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+function getLotesFromForm(){
+  return [...document.querySelectorAll('.f-lote-sql')]
+    .map(el=>el.value.trim()).filter(Boolean);
+}
+
+function setLotesInForm(lotes){
+  const list = document.getElementById('f-lotes-list');
+  if(!list) return;
+  list.innerHTML = '';
+  (lotes||[]).forEach(sql => addLoteInput(sql));
+}
+
 function saveTerreno(){
   const endereco = document.getElementById('f-endereco').value.trim();
   const corretor = document.getElementById('f-corretor').value.trim();
@@ -1800,6 +1856,7 @@ function saveTerreno(){
     zoneamento:document.getElementById('f-zone').value.trim(),
     setor:     document.getElementById('f-setor').value.trim(),
     quadra:    document.getElementById('f-quadra').value.trim(),
+    lotes:     getLotesFromForm(),
     status:    document.getElementById('f-status').value,
     data:      document.getElementById('f-data').value,
     obs:       document.getElementById('f-obs').value.trim(),
@@ -1899,6 +1956,44 @@ async function relocalizarTerreno(id){
   }
 }
 
+
+
+
+async function buscarAreaLotes(){
+  const btn = document.getElementById('btn-buscar-area');
+  const sqls = [...document.querySelectorAll('.f-lote-sql')].map(el=>el.value.trim()).filter(Boolean);
+  if(!sqls.length){ alert('Adicione pelo menos um lote SQL primeiro.'); return; }
+  if(btn){ btn.textContent='⏳ Buscando...'; btn.disabled=true; }
+  const WFS = 'https://wms.geosampa.prefeitura.sp.gov.br/geoserver/geoportal/wfs';
+  let totalArea = 0, found = 0;
+  for(const sql of sqls){
+    const sqli = sql.replace(/[.\-]/g,'');
+    const m = sql.match(/^(\d{3})\.(\d{3})\.(\d{4})/);
+    const filters = [
+      sqli ? `sqli='${sqli}'` : null,
+      m ? `cd_setor_fiscal='${m[1]}' AND cd_quadra_fiscal='${m[2]}' AND cd_lote_fiscal='${m[3]}'` : null,
+    ].filter(Boolean);
+    let area = null;
+    for(const cql of filters){
+      try{
+        const url = `${WFS}?service=WFS&version=2.0.0&request=GetFeature&typeName=geoportal:lote_cidadao&outputFormat=application/json&count=1&CQL_FILTER=${encodeURIComponent(cql)}`;
+        const d = await geoFetch(url);
+        if(d.features && d.features.length){
+          const p = d.features[0].properties;
+          console.log('[area] lote', sql, p);
+          area = p.area_m2 ?? p.ar_lote ?? p.at_lote ?? p.area_lote ?? p.area ?? p.ar_m2 ?? null;
+          if(area !== null) break;
+        }
+      }catch(e){ console.warn('[area]', sql, e.message); }
+    }
+    if(area !== null){ totalArea += parseFloat(area); found++; }
+    else console.warn('[area] nao encontrado:', sql);
+  }
+  if(btn){ btn.textContent='🔍 Buscar no GeoSampa'; btn.disabled=false; }
+  if(!found){ alert('Nenhuma área encontrada. Verifique o console (F12).'); return; }
+  document.getElementById('f-area').value = Math.round(totalArea).toLocaleString('pt-BR') + ' m²';
+  if(found < sqls.length) alert('Área parcial: ' + found + ' de ' + sqls.length + ' lotes encontrados.');
+}
 
 async function preencherSetorQuadra(lat, lng){
   try{
@@ -2470,7 +2565,7 @@ function switchTab(name){
 }
 
 // ── DASHBOARD ────────────────────────────────────────────────────────────────
-let _dashStatusFilter='';
+let _dashStatusFilter='3.Negociando';
 let _dashSearch='';
 let _ataStatusFilter='3.Negociando';
 let _statusChart=null,_mensalChart=null;
@@ -2615,33 +2710,132 @@ function renderAtaSection(){
         </div>`).join('')+`</div>`
       :'';
 
-    // ata entries (legado)
+    // ata entries com status
     const ataHtml=hasAta
-      ?t.ata.map(e=>`<div class="dash-ata-entry">
-          <div class="dash-ata-entry-date">${formatAtaDate(e.data)}</div>
-          <div class="dash-ata-entry-text">${escHtml(e.texto)}</div>
-        </div>`).join('')
+      ?[...t.ata].sort((a,b)=>b.data.localeCompare(a.data)).map(e=>{
+          const sc=e.status?statusColor(e.status):'';
+          const sl=e.status?(STATUS_LABELS[e.status]||e.status):'';
+          return `<div class="dash-ata-entry">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+              <div class="dash-ata-entry-date">${formatAtaDate(e.data)}</div>
+              ${sl?`<span style="font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700;background:${sc}22;color:${sc};border:1px solid ${sc}44;">${sl}</span>`:''}
+            </div>
+            <div class="dash-ata-entry-text">${escHtml(e.texto)}</div>
+          </div>`;
+        }).join('')
       :'';
 
     // obs
     const obsHtml=t.obs&&t.obs.trim()
       ?`<div class="dash-obs-block">${escHtml(t.obs)}</div>`:'';
 
-    return `<button class="dash-ata-btn${totalItems===0?' zero':''}" onclick="toggleAtaPanel(this,'ap${i}')">
-        <span class="dash-ata-btn-name">${t.endereco}</span>
-        <span class="dash-ata-badge${totalItems===0?' zero':''}">${totalItems||0}</span>
-      </button>
-      <div class="dash-ata-panel" id="ap${i}">
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:0;">
+        <button class="dash-ata-btn${totalItems===0?' zero':''}" onclick="toggleAtaPanel(this,'ap${i}','ata')" id="btn-ata-${i}">
+          <span class="dash-ata-btn-name">${t.endereco}</span>
+          <span class="dash-ata-badge${totalItems===0?' zero':''}">${totalItems||0}</span>
+        </button>
+        <button class="dash-tab-btn" onclick="toggleAtaPanel(this,'ap${i}','estudo')" id="btn-estudo-${i}"
+          style="padding:6px 14px;border-radius:8px;border:1px solid #7c3aed44;background:#f5f3ff;color:#7c3aed;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;">
+          📐 Estudo de Massa
+        </button>
+        <button class="dash-tab-btn" onclick="toggleAtaPanel(this,'ap${i}','viab')" id="btn-viab-${i}"
+          style="padding:6px 14px;border-radius:8px;border:1px solid #059669;background:#f0fdf4;color:#059669;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;">
+          💰 Viabilidade
+        </button>
+      </div>
+      <div class="dash-ata-panel" id="ap${i}" data-tab="ata">
+        <button onclick="closeAtaModal()" style="display:none;float:right;background:#f3f4f6;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:20px;color:#6b7280;margin-bottom:8px;" class="ata-close-x">✕</button>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
           <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44;">${label}</span>
           ${infos}
         </div>
         ${obsHtml}
         ${todosHtml?`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Tarefas</div>${todosHtml}`:''}
-        ${ataHtml?`<div style="margin-top:8px;margin-bottom:4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Ata</div>${ataHtml}`:''}
+        <!-- ata entries are now shown in the inline editor below -->
         ${!todosHtml&&!ataHtml&&!obsHtml?'<div class="dash-ata-empty">Sem tarefas ou observações ainda.</div>':''}
-        <div class="dash-todo-input-wrap" id="dti-wrap-${i}">
-          <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Nova tarefa</div>
+        <!-- SEÇÃO 1: HISTÓRICO / NOVA ENTRADA -->
+        <div class="dash-ata-inline-wrap" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+            <span style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;">📋 Histórico de acompanhamento</span>
+          </div>
+          <div class="dash-ata-live-list" id="dal-${i}">
+            ${ataHtml||'<div class="dash-ata-empty">Nenhuma entrada ainda.</div>'}
+          </div>
+          <div style="border-top:1px dashed var(--border);margin:12px 0 10px;"></div>
+          <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">+ Nova entrada</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+            <input type="date" id="dad-${i}" value="${new Date().toISOString().slice(0,10)}"
+              style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);background:var(--bg);color:var(--text);flex-shrink:0;">
+            <select id="das-${i}"
+              style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);background:var(--bg);color:var(--text);flex:1;min-width:140px;">
+              <option value="">— status atual —</option>
+              <option value="1.Recebido">Recebido</option>
+              <option value="2.Estudo">Em Estudo</option>
+              <option value="3.Negociando">Negociando</option>
+              <option value="4.Análise">Análise</option>
+              <option value="6.Hold">Hold</option>
+              <option value="5.Frio">Frio</option>
+              <option value="8.Descartado">Descartado</option>
+            </select>
+          </div>
+          <textarea id="dai-${i}" class="dash-ata-textarea" rows="3"
+            placeholder="O que aconteceu? Próximos passos…"
+            onkeydown="if(event.key==='Enter'&&(event.ctrlKey||event.metaKey)){event.preventDefault();addDashAta('${t.id}',${i});}"></textarea>
+          <div style="display:flex;align-items:center;gap:8px;margin-top:8px;">
+            <button class="dash-ata-save-btn" onclick="addDashAta('${t.id}',${i})">💾 Salvar</button>
+            <span style="font-size:10px;color:var(--muted);">Ctrl+Enter para salvar</span>
+          </div>
+        </div>
+
+        <!-- SEÇÃO 2: FUP CORRETOR -->
+        <div style="background:#f0fafa;border:1.5px solid #00B0BA44;border-radius:10px;padding:14px;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="background:#00B0BA;color:#fff;border-radius:6px;padding:3px 10px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">📋 FUP Corretor</span>
+            </div>
+            ${(t.lotes&&t.lotes.length)?`<button onclick="gerarPdfFup('${t.id}')" style="font-size:11px;padding:5px 14px;border-radius:6px;border:none;background:#00B0BA;color:#fff;cursor:pointer;font-family:var(--sans);font-weight:600;">📄 Gerar PDF</button>`:''}
+          </div>
+          ${!(t.lotes&&t.lotes.length)?`<div style="font-size:12px;color:var(--muted);font-family:var(--mono);">Nenhum lote cadastrado. Adicione SQLs em <b>Editar terreno → Lotes</b>.</div>`:`
+          <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input type="date" id="fup-date-${i}" value="${new Date().toISOString().slice(0,10)}"
+              style="font-size:12px;padding:5px 8px;border:1px solid #00B0BA88;border-radius:6px;font-family:var(--mono);background:#fff;color:var(--text);">
+            <span style="font-size:11px;color:var(--muted);">Data da reunião</span>
+          </div>
+          <div id="fup-lotes-${i}">
+            ${t.lotes.map((sql,li)=>`
+              <div style="margin-bottom:10px;background:#fff;border:1px solid #00B0BA33;border-radius:8px;padding:10px;">
+                <div style="font-size:11px;font-weight:700;color:#00B0BA;font-family:var(--mono);margin-bottom:6px;">🔑 ${sql}</div>
+                <textarea id="fup-txt-${i}-${li}" class="dash-ata-textarea" rows="2"
+                  placeholder="O que foi combinado para este lote?"
+                  style="background:#fafffe;border-color:#00B0BA33;"></textarea>
+              </div>`).join('')}
+          </div>
+          <button style="background:#00B0BA;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:var(--sans);" onclick="salvarFup('${t.id}',${i})">💾 Salvar FUP</button>
+          ${(t.fup_corretor&&t.fup_corretor.length)?`
+          <div style="margin-top:12px;border-top:1px dashed var(--border);padding-top:10px;">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Reuniões anteriores</div>
+            ${[...t.fup_corretor].sort((a,b)=>b.data.localeCompare(a.data)).map((r,ri)=>`
+              <details style="margin-bottom:6px;">
+                <summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--text);font-family:var(--mono);padding:4px 0;display:flex;align-items:center;gap:8px;">
+                  <span style="flex:1;">${formatAtaDate(r.data)}</span>
+                  <button onclick="event.stopPropagation();editFup('${t.id}',${t.fup_corretor.indexOf(r)},${i})" style="font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid #00B0BA44;background:#f0fafa;color:#00B0BA;cursor:pointer;">✏ Editar</button>
+                  <button onclick="event.stopPropagation();deleteFup('${t.id}',${t.fup_corretor.indexOf(r)},${i})" style="font-size:10px;padding:2px 8px;border-radius:10px;border:1px solid #f8717144;background:#fff5f5;color:#ef4444;cursor:pointer;">🗑 Apagar</button>
+                </summary>
+                <div style="padding:8px 0 0 8px;">
+                  ${Object.entries(r.lotes||{}).map(([sql,txt])=>`
+                    <div style="margin-bottom:6px;">
+                      <div style="font-size:11px;color:var(--accent);font-family:var(--mono);font-weight:700;">🔑 ${sql}</div>
+                      <div style="font-size:12px;color:var(--text);white-space:pre-wrap;padding-left:4px;">${escHtml(txt)}</div>
+                    </div>`).join('')}
+                </div>
+              </details>`).join('')}
+          </div>`:''}
+          `}
+        </div>
+        <div class="dash-todo-input-wrap" id="dti-wrap-${i}" style="background:#fffbf0;border:1.5px solid #f59e0b44;border-radius:10px;padding:14px;">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">
+            <span style="background:#f59e0b;color:#fff;border-radius:6px;padding:3px 10px;font-size:10px;">✅ TO DO</span>
+          </div>
           <div style="position:relative;">
             <input type="text" class="dash-todo-input" id="dti-${i}"
               placeholder="Descreva… use @kamila @alexandre @camila"
@@ -2654,20 +2848,110 @@ function renderAtaSection(){
             <button onclick="openModal('${t.id}')" style="font-size:11px;font-family:var(--mono);padding:5px 14px;border-radius:20px;background:none;border:1px solid var(--border);cursor:pointer;color:var(--text);">✏ Editar terreno</button>
           </div>
         </div>
+      </div>
+      <div class="dash-ata-panel" id="ap${i}-estudo"
+        style="border:1.5px solid #7c3aed44;border-radius:10px;padding:16px;background:#faf5ff;margin-top:6px;">
+        <button onclick="closeAtaModal()" style="display:none;float:right;background:#f3f4f6;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:20px;color:#6b7280;margin-bottom:8px;" class="ata-close-x">✕</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;">📐 Estudo de Massa — ${t.endereco}</span>
+          <label style="padding:5px 14px;border-radius:6px;background:#7c3aed;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">
+            📤 Carregar Excel
+            <input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadTabExcel(this,'${t.id}','estudo_massa',${i},'estudo')">
+          </label>
+        </div>
+        <div id="tab-estudo-${i}">${renderTabData(t.estudo_massa,'estudo')}</div>
+      </div>
+      <div class="dash-ata-panel" id="ap${i}-viab"
+        style="border:1.5px solid #05966944;border-radius:10px;padding:16px;background:#f0fdf4;margin-top:6px;">
+        <button onclick="closeAtaModal()" style="display:none;float:right;background:#f3f4f6;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:20px;color:#6b7280;margin-bottom:8px;" class="ata-close-x">✕</button>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;">💰 Viabilidade — ${t.endereco}</span>
+          <label style="padding:5px 14px;border-radius:6px;background:#059669;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">
+            📤 Carregar Excel
+            <input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadTabExcel(this,'${t.id}','viabilidade',${i},'viab')">
+          </label>
+        </div>
+        <div id="tab-viab-${i}">${renderTabData(t.viabilidade,'viab')}</div>
       </div>`;
   }).join('');
 }
 
-function toggleAtaPanel(btn,panelId){
-  const panel=document.getElementById(panelId);
-  if(!panel) return;
-  const isOpen=panel.classList.contains('open');
-  document.querySelectorAll('.dash-ata-panel').forEach(p=>p.classList.remove('open'));
-  document.querySelectorAll('.dash-ata-btn').forEach(b=>b.classList.remove('active'));
-  if(!isOpen){panel.classList.add('open');btn.classList.add('active');}
+
+function renderTabData(data, type){
+  if(!data||!data.length) return '<div style="font-size:12px;color:#aaa;font-family:var(--mono);padding:8px 0;">Nenhum arquivo carregado. Clique em Carregar Excel.</div>';
+  const color = type==='estudo' ? '#7c3aed' : '#059669';
+  const thStyle = 'text-align:left;padding:6px 8px;border-bottom:2px solid '+color+'33;color:'+color+';font-size:10px;text-transform:uppercase;white-space:nowrap;';
+  const headers = Object.keys(data[0]);
+  let html2 = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr>';
+  headers.forEach(h=>{ html2+='<th style="'+thStyle+'">'+escHtml(String(h))+'</th>'; });
+  html2+='</tr></thead><tbody>';
+  data.forEach((row,ri)=>{
+    const bg = ri%2===0?'transparent':'rgba(0,0,0,.025)';
+    html2+='<tr style="background:'+bg+'">';
+    headers.forEach(h=>{ html2+='<td style="padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;">'+escHtml(String(row[h]??''))+'</td>'; });
+    html2+='</tr>';
+  });
+  html2+='</tbody></table></div>';
+  return html2;
 }
 
-// ── TAREFAS (MODAL) ──────────────────────────────────────────────────────────
+async function uploadTabExcel(input, terrenoId, field, panelIdx, tabKey){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = async function(e){
+    try{
+      const wb = XLSX.read(e.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      const idx = terrenos.findIndex(t=>t.id===terrenoId);
+      if(idx>=0) terrenos[idx][field] = rows;
+      const el = document.getElementById('tab-'+tabKey+'-'+panelIdx);
+      if(el) el.innerHTML = renderTabData(rows, tabKey);
+      db.collection('terrenos').doc(terrenoId).update({[field]: rows.slice(0,200)}).catch(console.warn);
+    }catch(err){ alert('Erro ao ler Excel: '+err.message); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function closeAtaModal(){
+  // Clear the modal wrap and hide
+  const wrap = document.getElementById('ata-modal-wrap');
+  if(wrap){ wrap.innerHTML=''; wrap.style.display='none'; wrap._activePanelId=null; }
+  const ov = document.getElementById('ata-modal-overlay');
+  if(ov) ov.style.display='none';
+  document.querySelectorAll('.dash-ata-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.dash-tab-btn').forEach(b=>{ b.style.opacity='0.75'; });
+  // Rebuild panels in their original positions
+  renderAtaSection();
+}
+
+function toggleAtaPanel(btn, panelId, tab){
+  tab = tab||'ata';
+  const actualId = tab==='ata' ? panelId : panelId+'-'+tab;
+  const wrap = document.getElementById('ata-modal-wrap');
+  const ov = document.getElementById('ata-modal-overlay');
+  // Toggle: if same panel open, close it
+  if(wrap && wrap._activePanelId === actualId){ closeAtaModal(); return; }
+  // Clear wrap (without re-rendering) and get fresh panel
+  if(wrap){ wrap.innerHTML=''; wrap.style.display='none'; wrap._activePanelId=null; }
+  const panel = document.getElementById(actualId);
+  if(!panel){ return; }
+  // Build modal content
+  wrap._activePanelId = actualId;
+  const cl = document.createElement('button');
+  cl.innerHTML = '✕';
+  cl.style.cssText = 'float:right;background:#f3f4f6;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:20px;color:#6b7280;margin-bottom:8px;';
+  cl.onclick = function(e){ e.stopPropagation(); closeAtaModal(); };
+  wrap.appendChild(cl);
+  wrap.appendChild(panel);
+  panel.style.display = 'block';
+  wrap.style.display = 'block';
+  if(ov) ov.style.display = 'block';
+  btn.classList.add('active'); btn.style.opacity='1';
+}
+
+
 function renderModalTodos(){
   const el=document.getElementById('modal-todo-list');
   if(!el) return;
@@ -2803,6 +3087,175 @@ async function addDashTodo(terrenoId, panelIdx){
     });
   }
 }
+
+
+async function salvarFup(terrenoId, panelIdx){
+  const dateEl = document.getElementById('fup-date-'+panelIdx);
+  const data = dateEl?.value;
+  if(!data){ alert('Selecione a data da reunião.'); return; }
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const t = terrenos[idx];
+  const lotes = t.lotes||[];
+  const lotesObj = {};
+  lotes.forEach((sql,li)=>{
+    const txt = (document.getElementById(`fup-txt-${panelIdx}-${li}`)?.value||'').trim();
+    if(txt) lotesObj[sql] = txt;
+  });
+  if(!Object.keys(lotesObj).length){ alert('Preencha ao menos um lote.'); return; }
+  const nova = {data, lotes: lotesObj};
+  const fup = Array.isArray(t.fup_corretor) ? [...t.fup_corretor, nova] : [nova];
+  terrenos[idx].fup_corretor = fup;
+  // Clear fields
+  lotes.forEach((_,li)=>{ const el=document.getElementById(`fup-txt-${panelIdx}-${li}`); if(el) el.value=''; });
+  db.collection('terrenos').doc(terrenoId).update({fup_corretor: fup}).catch(console.warn);
+  // Refresh panel
+  renderAtaSection();
+  alert('FUP salvo!');
+}
+
+
+function deleteFup(terrenoId, origIdx, panelIdx){
+  if(!confirm('Apagar esta reunião?')) return;
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  terrenos[idx].fup_corretor.splice(origIdx, 1);
+  db.collection('terrenos').doc(terrenoId).update({fup_corretor: terrenos[idx].fup_corretor}).catch(console.warn);
+  renderAtaSection();
+  const panel = document.getElementById('ap'+panelIdx);
+  if(panel){ const btn=document.getElementById('btn-ata-'+panelIdx); toggleAtaPanel(btn||panel,'ap'+panelIdx,'ata'); }
+}
+
+function editFup(terrenoId, origIdx, panelIdx){
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const entry = (terrenos[idx].fup_corretor||[])[origIdx];
+  if(!entry) return;
+  // Populate form fields
+  const dateEl = document.getElementById('fup-date-'+panelIdx);
+  if(dateEl) dateEl.value = entry.data;
+  const lotes = terrenos[idx].lotes||[];
+  lotes.forEach((sql,li)=>{
+    const el = document.getElementById('fup-txt-'+panelIdx+'-'+li);
+    if(el) el.value = entry.lotes?.[sql]||'';
+  });
+  // Remove old entry so saving replaces it
+  terrenos[idx].fup_corretor.splice(origIdx, 1);
+  // Scroll form into view
+  if(dateEl) dateEl.scrollIntoView({behavior:'smooth', block:'center'});
+  // Rebuild the historic section
+  renderAtaSection();
+  const panel = document.getElementById('ap'+panelIdx);
+  if(panel){ const btn=document.getElementById('btn-ata-'+panelIdx); toggleAtaPanel(btn||panel,'ap'+panelIdx,'ata'); }
+  // Re-populate after reopen (fields reset on rerender)
+  setTimeout(()=>{
+    if(dateEl) dateEl.value = entry.data;
+    lotes.forEach((sql,li)=>{
+      const el = document.getElementById('fup-txt-'+panelIdx+'-'+li);
+      if(el) el.value = entry.lotes?.[sql]||'';
+    });
+    if(dateEl) dateEl.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 50);
+}
+
+function gerarPdfFup(terrenoId){
+  const t = terrenos.find(x=>x.id===terrenoId);
+  if(!t||!t.fup_corretor||!t.fup_corretor.length){ alert('Nenhum FUP salvo ainda.'); return; }
+
+  // Escolha da reunião
+  const sorted = [...t.fup_corretor].sort((a,b)=>b.data.localeCompare(a.data));
+  const opcoes = sorted.map((r,i)=>formatAtaDate(r.data)).join('\n');
+  const escolha = prompt(`Qual reunião exportar?\n\n${sorted.map((r,i)=>`${i+1}. ${formatAtaDate(r.data)}`).join('\n')}\n\nDigite o número:`);
+  if(!escolha) return;
+  const ri = parseInt(escolha)-1;
+  if(isNaN(ri)||ri<0||ri>=sorted.length){ alert('Opção inválida.'); return; }
+  const reuniao = sorted[ri];
+
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const rows = Object.entries(reuniao.lotes||{}).map(([sql,txt])=>`
+    <tr>
+      <td style="font-family:monospace;font-size:13px;padding:10px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:nowrap;color:#00B0BA;font-weight:700;">${sql}</td>
+      <td style="font-size:13px;padding:10px 12px;border-bottom:1px solid #e5e7eb;vertical-align:top;white-space:pre-wrap;line-height:1.6;">${escHtml(txt)}</td>
+    </tr>`).join('');
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8">
+<title>FUP Corretor — ${t.endereco}</title>
+<style>
+  body{font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:40px;color:#111;background:#fff;}
+  .header{border-bottom:3px solid #00B0BA;padding-bottom:16px;margin-bottom:24px;}
+  .logo{font-size:22px;font-weight:900;color:#00B0BA;letter-spacing:-.5px;}
+  .sub{font-size:13px;color:#666;margin-top:4px;}
+  h2{font-size:18px;margin:0 0 4px;color:#111;}
+  .meta{display:flex;gap:24px;font-size:12px;color:#666;margin-top:12px;}
+  .meta span{display:flex;align-items:center;gap:4px;}
+  table{width:100%;border-collapse:collapse;margin-top:8px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#999;padding:8px 12px;border-bottom:2px solid #e5e7eb;}
+  .footer{margin-top:32px;font-size:11px;color:#aaa;border-top:1px solid #e5e7eb;padding-top:12px;}
+  @media print{body{padding:20px;} button{display:none;}}
+</style></head><body>
+<div class="header">
+  <div class="logo">YUNY</div>
+  <div class="sub">FUP Corretor — Reunião Semanal</div>
+</div>
+<h2>${t.endereco}${t.bairro?', '+t.bairro:''}</h2>
+<div class="meta">
+  <span>📅 Reunião: <strong>${formatAtaDate(reuniao.data)}</strong></span>
+  ${t.corretor?`<span>👤 Corretor: <strong>${t.corretor}</strong></span>`:''}
+  ${t.area?`<span>📐 Área: <strong>${t.area}</strong></span>`:''}
+  ${t.zoneamento?`<span>🏙 Zona: <strong>${t.zoneamento}</strong></span>`:''}
+</div>
+<br>
+<table>
+  <thead><tr><th>SQL / Lote</th><th>Ações demandadas</th></tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="footer">Gerado em ${hoje} · YUNY Land Bank · Este documento não substitui documentação oficial.</div>
+<br><button onclick="window.print()" style="padding:10px 24px;background:#00B0BA;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600;">🖨 Imprimir / Salvar PDF</button>
+</body></html>`);
+  win.document.close();
+}
+
+async function addDashAta(terrenoId, panelIdx){
+  const inp    = document.getElementById('dai-'+panelIdx);
+  const date   = document.getElementById('dad-'+panelIdx);
+  const selSt  = document.getElementById('das-'+panelIdx);
+  const texto  = inp?.value.trim();
+  const data   = date?.value;
+  const status = selSt?.value || '';
+  if(!texto || !data){ alert('Preencha a data e o texto da ata.'); return; }
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const nova = {data, texto, ...(status ? {status} : {})};
+  const ata = Array.isArray(terrenos[idx].ata) ? [...terrenos[idx].ata, nova] : [nova];
+  terrenos[idx].ata = ata;
+  // Atualiza também o status do terreno se selecionado
+  if(status) terrenos[idx].status = status;
+  inp.value = '';
+  // Insere no topo da lista sem rerender
+  const liveList = document.getElementById('dal-'+panelIdx);
+  if(liveList){
+    const sc = status ? statusColor(status) : '';
+    const sl = status ? (STATUS_LABELS[status]||status) : '';
+    const el = document.createElement('div');
+    el.className = 'dash-ata-entry';
+    el.innerHTML = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+      <div class="dash-ata-entry-date">${formatAtaDate(data)}</div>
+      ${sl?`<span style="font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700;background:${sc}22;color:${sc};border:1px solid ${sc}44;">${sl}</span>`:''}
+    </div>
+    <div class="dash-ata-entry-text">${escHtml(texto)}</div>`;
+    // Remove empty state if present
+    const empty = liveList.querySelector('.dash-ata-empty');
+    if(empty) empty.remove();
+    liveList.prepend(el);
+  }
+  // Salvar no Firestore
+  const updates = {ata};
+  if(status) updates.status = status;
+  db.collection('terrenos').doc(terrenoId).update(updates).catch(console.warn);
+}
+
 
 function dashTodoItemHtml(td){
   return `<div class="dash-todo-item${td.concluido?' done':''}">
