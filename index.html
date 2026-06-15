@@ -2615,21 +2615,7 @@ function renderDashboard(){
   renderStatusChart(data);
   renderMensalChart(data);
 
-  // Terrenos do mês
-  const now=new Date();
-  const mesStr=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  const doMes=data.filter(t=>t.data&&String(t.data).startsWith(mesStr));
-  document.getElementById('dash-mes-titulo').textContent=`Terrenos Estudados em ${now.toLocaleString('pt-BR',{month:'long',year:'numeric'})}`;
-  document.getElementById('dash-mes-count').textContent=doMes.length;
-  document.getElementById('dash-mes-list').innerHTML=doMes.length
-    ?doMes.map(t=>{
-      const c=statusColor(t.status),lbl=STATUS_LABELS[t.status]||t.status;
-      return `<div class="dash-mes-item">
-        <div class="dash-mes-item-addr">${t.endereco}</div>
-        <div class="dash-mes-item-meta"><span class="dash-mes-dot" style="background:${c}"></span>${lbl}${t.corretor?` · ${t.corretor}`:''}</div>
-      </div>`;
-    }).join('')
-    :'<div style="color:var(--muted);font-size:13px;padding:8px 0;font-family:var(--mono)">Nenhum terreno este mês.</div>';
+
 
   renderAtaSection();
 }
