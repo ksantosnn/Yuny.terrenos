@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="viab_data.js"></script>
+<script src="viab_fc.js" onerror="window.VIAB_FC={}"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script>
@@ -278,10 +280,11 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 .legend-swatch{width:24px;height:12px;border-radius:3px;flex-shrink:0;opacity:.75;}
 
 /* MODAL */
-.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:2000;align-items:center;justify-content:center;}
-.modal-bg.active{display:flex;}
-.modal{background:var(--surface);border-radius:var(--radius-lg);width:520px;max-width:calc(100vw - 2rem);max-height:calc(100vh - 4rem);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
-.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:2000;pointer-events:none;}
+.modal-bg.active{display:block;}
+.modal{background:var(--surface);border-radius:var(--radius-lg);width:520px;max-width:calc(100vw - 2rem);max-height:calc(100vh - 4rem);overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:all;z-index:2001;}
+.modal-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;cursor:grab;user-select:none;}
+.modal-header:active{cursor:grabbing;}
 .modal-header h2{font-size:16px;font-weight:600;}
 .btn-close{background:none;border:none;cursor:pointer;color:var(--muted);font-size:18px;padding:4px;}
 .modal-body{padding:20px 24px;}
@@ -314,6 +317,8 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 .popup-actions{display:flex;gap:6px;margin-top:10px;}
 .popup-btn{flex:1;font-size:11px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);background:var(--bg);cursor:pointer;font-family:var(--sans);}
 .popup-btn:hover{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+.viab-table tr:hover td{background-color:rgba(0,176,185,0.05)!important;}
+.viab-inp:focus{outline:1px solid #00B0B9;outline-offset:-1px;background:#fff8d6!important;}
 
 /* ── MOBILE ────────────────────────────────────────────────────────────────── */
 .btn-mobile-add {
@@ -611,6 +616,12 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 .dash-ata-entry-date { font-weight:600; color:var(--accent); margin-bottom:2px; }
 .dash-ata-entry-text { color:var(--text); line-height:1.5; white-space:pre-wrap; }
 .dash-ata-empty { color:var(--muted); font-size:12px; font-family:var(--mono); }
+/* Lote tabs */
+.lote-tab-bar{display:flex;gap:4px;flex-wrap:wrap;margin:10px 0 12px;border-bottom:2px solid #e5e7eb;padding-bottom:0;}
+.lote-tab{padding:5px 12px;border:1px solid #e5e7eb;border-bottom:none;border-radius:6px 6px 0 0;background:#f9fafb;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:var(--mono);white-space:nowrap;margin-bottom:-2px;transition:all .15s;}
+.lote-tab.active{background:#fff;color:var(--accent);border-color:#00B0BA;border-bottom-color:#fff;z-index:1;position:relative;}
+.lote-tab:hover:not(.active){background:#f0fafa;color:var(--text);}
+.lote-tab-pane{display:none;}.lote-tab-pane.active{display:block;}
 .dash-ata-add {
   display:flex; flex-direction:column; gap:6px; margin-top:12px;
   padding-top:12px; border-top:1px dashed var(--border);
@@ -839,9 +850,14 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PizZip/3.1.0/pizzip.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+<!-- Tesseract.js OCR — carregado sob demanda em _ocrPdfPage() -->
+<script src="proposta_templates.js"></script>
 </head>
 <body>
-<div id="ata-modal-wrap" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;width:min(860px,92vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.3);padding:24px 28px;"></div>
+<div id="ata-modal-wrap" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;width:min(860px,92vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.3);padding:24px 28px;transition:width .2s;"></div>
 <div id="ata-modal-overlay" onclick="closeAtaModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;backdrop-filter:blur(2px);"></div>
 
 <header>
@@ -878,6 +894,9 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
           <option value="5.Frio">Frio</option>
           <option value="6.Hold">Hold</option>
           <option value="8.Descartado">Descartado</option>
+        </select>
+        <select id="filter-responsavel" onchange="renderList()" style="grid-column:span 2;">
+          <option value="">Todos responsáveis</option>
         </select>
         <button class="btn-export" onclick="exportExcel()">⬇ Exportar Excel</button>
         <button class="btn-export" onclick="document.getElementById('import-input').click()" style="border-color:var(--accent);color:var(--accent)">⬆ Importar Excel</button>
@@ -1082,7 +1101,19 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
       </div>
       <div class="field">
         <label>Lotes (SQL)</label>
+        <div style="display:grid;grid-template-columns:1fr 90px 32px;gap:4px;margin-bottom:4px;padding:0 2px;">
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">SQL</span>
+          <span style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:right;">Área (m²)</span>
+          <span></span>
+        </div>
         <div id="f-lotes-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 90px 32px;gap:4px;margin:4px 0 8px;padding:4px 2px;border-top:1px solid var(--border);">
+          <span style="font-size:11px;font-weight:700;color:var(--text);">Total</span>
+          <span id="f-lotes-total" style="font-size:11px;font-weight:700;color:var(--accent);text-align:right;">—</span>
+          <span></span>
+        </div>
+        <button type="button" id="btn-salvar-areas" onclick="salvarApenasAreas()"
+          style="display:none;font-size:11px;padding:5px 14px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:var(--sans);font-weight:600;margin-bottom:6px;">💾 Salvar áreas</button>
         <button type="button" onclick="addLoteInput()" style="font-size:12px;padding:5px 14px;border-radius:6px;border:1px dashed var(--accent);background:none;color:var(--accent);cursor:pointer;font-family:var(--sans);">+ Adicionar lote</button>
       </div>
       <div class="field-row">
@@ -1117,8 +1148,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
           <button class="btn-draw-poly" id="btn-adjust-poly" style="flex:1;margin-top:0;display:none" onclick="startAdjustMode()">🔧 Ajustar polígono</button>
         </div>
       </div>
-      <div class="field"><label>Observações / Follow Up</label><textarea id="f-obs"></textarea></div>
-
       <!-- TAREFAS -->
       <div class="field todo-section" style="margin-top:4px;background:none;padding:12px 0 0;border-top:1px dashed var(--border)">
         <label>Tarefas</label>
@@ -1723,8 +1752,16 @@ let _modalViewMode = false;
 function setModalViewMode(isView){
   _modalViewMode = isView;
   // Toggle inputs
-  const fields = ['f-endereco','f-bairro','f-area','f-corretor','f-zone','f-responsavel','f-setor','f-quadra','f-status','f-data','f-obs','modal-todo-input'];
+  const fields = ['f-endereco','f-bairro','f-area','f-corretor','f-zone','f-responsavel','f-setor','f-quadra','f-status','f-data','modal-todo-input'];
   fields.forEach(id=>{ const el=document.getElementById(id); if(el) el.disabled=isView; });
+  // Lote inputs — SQL locked in view mode, but areas always editable
+  document.querySelectorAll('.f-lote-sql').forEach(el=>{ el.disabled=isView; });
+  document.querySelectorAll('#f-lotes-list button').forEach(el=>{ el.disabled=isView; el.style.opacity=isView?'.3':'1'; });
+  // Show quick-save button for areas in view mode
+  const saveAreasBtn = document.getElementById('btn-salvar-areas');
+  if(saveAreasBtn) saveAreasBtn.style.display = isView ? '' : 'none';
+  const addLoteBtn=document.querySelector('[onclick="addLoteInput()"]');
+  if(addLoteBtn) addLoteBtn.style.display=isView?'none':'';
   // Toggle buttons
   const _s=(id,v)=>{const e=document.getElementById(id);if(e)e.style.display=v;};
   const _sq=(sel,v)=>{const e=document.querySelector(sel);if(e)e.style.display=v;};
@@ -1758,11 +1795,10 @@ function openModal(id, viewMode=false){
   document.getElementById('f-zone').value     = t?.zoneamento||'';
   document.getElementById('f-setor').value    = t?.setor||'';
   document.getElementById('f-quadra').value   = t?.quadra||'';
-  setLotesInForm(t?.lotes||[]);
+  setLotesInForm(t?.lotes||[], t?.lotes_areas||{});
   document.getElementById('f-status').value   = t?.status||'5.Frio';
   document.getElementById('f-data').value     = t?.data||new Date().toISOString().split('T')[0];
-  document.getElementById('f-obs').value      = obsRecentes(t?.obs, 5);
-  setLotesInForm(t?.lotes||[]);
+  const fobs = document.getElementById('f-obs'); if(fobs) fobs.value = obsRecentes(t?.obs, 5);
   // Responsável — popular select com EQUIPE
   const selResp = document.getElementById('f-responsavel');
   selResp.innerHTML = '<option value="">— Sem responsável —</option>' +
@@ -1792,6 +1828,10 @@ function openModal(id, viewMode=false){
   setModalViewMode(viewMode);
   if(!viewMode) document.getElementById('btn-delete').style.display = id ? 'block':'none';
   document.getElementById('modal-bg').classList.add('active');
+  // Reset modal to center on each open
+  const m = document.querySelector('.modal');
+  m.style.top='50%'; m.style.left='50%'; m.style.transform='translate(-50%,-50%)';
+  initModalDrag();
 }
 
 function closeModal(){
@@ -1804,31 +1844,64 @@ function closeModal(){
 }
 
 
-function addLoteInput(val=''){
+function updateLotesTotal(){
+  const areas = [...document.querySelectorAll('.f-lote-area')]
+    .map(el=>parseFloat(el.value)||0);
+  const total = areas.reduce((s,a)=>s+a,0);
+  const el = document.getElementById('f-lotes-total');
+  if(el) el.textContent = total>0 ? total.toLocaleString('pt-BR')+ ' m²' : '—';
+}
+
+async function salvarApenasAreas(){
+  if(!editingId) return;
+  const idx = terrenos.findIndex(t=>t.id===editingId);
+  if(idx<0) return;
+  const btn = document.getElementById('btn-salvar-areas');
+  if(btn){ btn.textContent='⏳ Salvando…'; btn.disabled=true; }
+  const lotes_areas = {};
+  [...document.querySelectorAll('#f-lotes-list > div')].forEach(row=>{
+    const sql = row.querySelector('.f-lote-sql')?.value.trim();
+    const area = parseFloat(row.querySelector('.f-lote-area')?.value)||0;
+    if(sql && area) lotes_areas[sql] = area;
+  });
+  terrenos[idx].lotes_areas = lotes_areas;
+  await db.collection('terrenos').doc(editingId).update({lotes_areas}).catch(console.warn);
+  if(btn){ btn.textContent='✅ Salvo!'; btn.disabled=false; }
+  setTimeout(()=>{ if(btn) btn.textContent='💾 Salvar áreas'; }, 2000);
+  renderAtaSection();
+}
+
+function addLoteInput(sql='', area=''){
   const list = document.getElementById('f-lotes-list');
   if(!list) return;
-  const idx = list.children.length;
   const row = document.createElement('div');
-  row.style.cssText = 'display:flex;gap:6px;align-items:center;';
-  row.innerHTML = `<input type="text" class="f-lote-sql" value="${val}"
+  row.style.cssText = 'display:grid;grid-template-columns:1fr 90px 32px;gap:4px;align-items:center;';
+  row.innerHTML = `<input type="text" class="f-lote-sql" value="${sql}"
     placeholder="ex: 045.105.0036-1"
-    style="flex:1;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--mono);background:var(--surface);color:var(--text);">
-    <button type="button" onclick="this.parentElement.remove()"
-      style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:none;cursor:pointer;color:var(--muted);font-size:13px;">✕</button>`;
+    style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--mono);background:var(--surface);color:var(--text);">
+    <input type="number" class="f-lote-area" value="${area}" min="0" step="0.01" placeholder="m²"
+    oninput="updateLotesTotal()"
+    style="font-size:12px;padding:6px 6px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--mono);background:var(--surface);color:var(--text);text-align:right;">
+    <button type="button" onclick="this.parentElement.remove();updateLotesTotal();"
+      style="padding:5px 8px;border:1px solid var(--border);border-radius:var(--radius);background:none;cursor:pointer;color:var(--muted);font-size:12px;">✕</button>`;
   list.appendChild(row);
-  row.querySelector('input').focus();
+  if(!sql) row.querySelector('.f-lote-sql').focus();
 }
 
 function getLotesFromForm(){
-  return [...document.querySelectorAll('.f-lote-sql')]
-    .map(el=>el.value.trim()).filter(Boolean);
+  return [...document.querySelectorAll('#f-lotes-list > div')]
+    .map(row=>({
+      sql:  row.querySelector('.f-lote-sql')?.value.trim()||'',
+      area: parseFloat(row.querySelector('.f-lote-area')?.value)||0
+    })).filter(r=>r.sql);
 }
 
-function setLotesInForm(lotes){
+function setLotesInForm(lotes, lotes_areas={}){
   const list = document.getElementById('f-lotes-list');
   if(!list) return;
   list.innerHTML = '';
-  (lotes||[]).forEach(sql => addLoteInput(sql));
+  (lotes||[]).forEach(sql => addLoteInput(sql, lotes_areas[sql]||''));
+  updateLotesTotal();
 }
 
 function saveTerreno(){
@@ -1846,7 +1919,13 @@ function saveTerreno(){
     if(existing){ lat=existing.lat||null; lng=existing.lng||null; }
   }
 
+  // Preserve existing fields (ata, lotes_precos, fup, etc.) that are not edited here
+  const _existing = editingId ? (terrenos.find(t=>t.id===editingId)||{}) : {};
+  const _lotesForm = getLotesFromForm();
+  const _lotesAreas = {}; _lotesForm.forEach(x=>{ if(x.area) _lotesAreas[x.sql]=x.area; });
+
   const obj = {
+    ..._existing,  // preserve ata, lotes_precos, fup, lotes_areas, etc.
     id: editingId||'new_'+Date.now(),
     endereco,
     bairro:    document.getElementById('f-bairro').value.trim(),
@@ -1855,15 +1934,16 @@ function saveTerreno(){
     zoneamento:document.getElementById('f-zone').value.trim(),
     setor:     document.getElementById('f-setor').value.trim(),
     quadra:    document.getElementById('f-quadra').value.trim(),
-    lotes:     getLotesFromForm(),
+    lotes:     _lotesForm.map(x=>x.sql),
+    lotes_areas: _lotesAreas,
     status:    document.getElementById('f-status').value,
     data:      document.getElementById('f-data').value,
-    obs:       document.getElementById('f-obs').value.trim(),
+    obs:       document.getElementById('f-obs')?.value.trim()||'',
     responsavel: document.getElementById('f-responsavel').value||'',
     todos:     JSON.parse(JSON.stringify(_modalTodos)),
     lat, lng,
     polygons: pendingPolygons.length ? JSON.stringify(pendingPolygons) : null,
-    polygon: null, // legado — substituído por polygons
+    polygon: null,
   };
 
   // Atualiza local e fecha modal imediatamente
@@ -2531,6 +2611,7 @@ function norm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300
 function getCorretores(){ return [...new Set(terrenos.map(t=>t.corretor).filter(Boolean))].sort(); }
 
 function updateFilters(){
+  // Corretor filter
   const sel = document.getElementById('filter-corretor');
   const prev = sel.value;
   sel.innerHTML='<option value="">Todos corretores</option>';
@@ -2543,16 +2624,29 @@ function updateFilters(){
   const dl=document.getElementById('corretores-list');
   dl.innerHTML='';
   getCorretores().forEach(c=>{ const o=document.createElement('option');o.value=c;dl.appendChild(o); });
+  // Responsável filter — populated from EQUIPE (only members that have at least one terreno)
+  const selResp = document.getElementById('filter-responsavel');
+  const prevResp = selResp.value;
+  const usedHandles = new Set(terrenos.map(t=>t.responsavel).filter(Boolean));
+  selResp.innerHTML='<option value="">Todos responsáveis</option>';
+  EQUIPE.filter(m=>usedHandles.has(m.handle)).forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m.handle; o.textContent=m.nome;
+    if(m.handle===prevResp) o.selected=true;
+    selResp.appendChild(o);
+  });
 }
 
 function getFiltered(){
   const q=norm(document.getElementById('search').value);
   const fc=document.getElementById('filter-corretor').value;
   const fs=document.getElementById('filter-status').value;
+  const fr=document.getElementById('filter-responsavel').value;
   return terrenos.filter(t=>{
     if(fc && t.corretor!==fc) return false;
     if(fs && t.status!==fs) return false;
-    if(q && !norm(t.endereco+t.bairro+t.corretor+t.obs+t.zoneamento).includes(q)) return false;
+    if(fr && t.responsavel!==fr) return false;
+    if(q && !norm(t.endereco+t.bairro+t.corretor+t.obs+t.zoneamento+(t.responsavel||'')).includes(q)) return false;
     return true;
   }).sort((a,b)=>{
     // Mais novo primeiro: usa data de recebimento, depois id numérico como fallback
@@ -2821,7 +2915,7 @@ function renderAtaSection(){
           style="padding:6px 14px;border-radius:8px;border:1px solid #7c3aed44;background:#f5f3ff;color:#7c3aed;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;">
           📐 Estudo de Massa
         </button>
-        <button class="dash-tab-btn" onclick="toggleAtaPanel(this,'ap${i}','viab')" id="btn-viab-${i}"
+        <button class="dash-tab-btn" onclick="toggleAtaPanel(this,'ap${i}','viab');expandModalForViab();setTimeout(()=>initViabPanel('${t.id}',${i}),80);" id="btn-viab-${i}"
           style="padding:6px 14px;border-radius:8px;border:1px solid #059669;background:#f0fdf4;color:#059669;font-size:12px;font-weight:600;cursor:pointer;font-family:var(--sans);white-space:nowrap;">
           💰 Viabilidade
         </button>
@@ -2832,34 +2926,122 @@ function renderAtaSection(){
           <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:${c}22;color:${c};border:1px solid ${c}44;">${label}</span>
           ${infos}
         </div>
-        ${obsHtml}
         ${todosHtml?`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Tarefas</div>${todosHtml}`:''}
         <!-- ata entries are now shown in the inline editor below -->
         ${!todosHtml&&!ataHtml&&!obsHtml?'<div class="dash-ata-empty">Sem tarefas ou observações ainda.</div>':''}
+
+        <!-- ABAS POR LOTE -->
+        ${(()=>{
+          const _sqlTabs = (t.lotes&&t.lotes.length) ? t.lotes.filter(s=>s) : [];
+          return `<div class="lote-tab-bar" id="ltb-${i}">
+            <button class="lote-tab active" onclick="switchLoteTab(${i},'geral')">📋 Geral</button>
+            ${_sqlTabs.map((sql,li)=>`<button class="lote-tab" onclick="switchLoteTab(${i},'${li}')" title="${sql}">${sql}</button>`).join('')}
+          </div>`;
+        })()}
+
+        <!-- PANE GERAL (wraps SEÇÃO 0 + 1 + 2 + TODO) -->
+        <div id="lt-geral-${i}" class="lote-tab-pane active">
+        <!-- SEÇÃO 0: LOTES / PREÇOS -->
+        ${(()=>{ const _lotes = (t.lotes&&t.lotes.length) ? t.lotes : ['','','','','']; return `
+        <div style="background:#fff;border:1.5px solid #00B0BA33;border-radius:10px;padding:14px;margin-bottom:12px;overflow-x:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:8px;flex-wrap:wrap;">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#00B0BA;">🔑 Lotes — Preços</span>
+            <button onclick="salvarLotesPrecos('${t.id}',${i})" style="font-size:11px;padding:4px 12px;border-radius:6px;border:none;background:#00B0BA;color:#fff;cursor:pointer;font-family:var(--sans);font-weight:600;">💾 Salvar</button>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:12px;font-family:var(--mono);">
+            <thead>
+              <tr style="background:#00B0BA;color:#fff;font-size:11px;">
+                <th style="padding:6px 10px;text-align:left;font-weight:700;border-radius:6px 0 0 0;white-space:nowrap;">SQL</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">Área (m²)</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">R$ Pedido</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">R$/m² Ped.</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">R$ Negociado</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">R$/m² Neg.</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">Permuta (m²)</th>
+                <th style="padding:6px 10px;text-align:center;font-weight:700;white-space:nowrap;">Tipo Permuta</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;white-space:nowrap;">R$ Permuta</th>
+                <th style="padding:6px 10px;text-align:right;font-weight:700;border-radius:0 6px 0 0;white-space:nowrap;">R$/m² Perm.</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${_lotes.map((sql,li)=>{
+                const saved = (t.lotes_precos||{})[sql]||{};
+                const _areaVal = saved.area || (t.lotes_areas||{})[sql] || '';
+                return `<tr style="background:${li%2===0?'#fff':'#f7fffe'};">
+                  <td style="padding:6px 10px;font-weight:700;color:#00B0BA;white-space:nowrap;">${sql}</td>
+                  <td style="padding:3px 5px;"><input type="number" id="lp-area-${i}-${li}" min="0" step="0.01" value="${_areaVal}" placeholder="—"
+                    style="width:80px;text-align:right;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:11px;"
+                    oninput="calcLotesPrecos(${i})"></td>
+                  <td style="padding:3px 5px;"><input type="text" id="lp-ped-${i}-${li}" value="${saved.pedido||''}" placeholder="—"
+                    style="width:110px;text-align:right;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:11px;"
+                    oninput="calcLotesPrecos(${i})"
+                    onblur="resolveLpFormula(this,${i})"
+                    onkeydown="if(event.key==='Enter'){resolveLpFormula(this,${i});this.blur();}"></td>
+                  <td style="padding:6px 10px;text-align:right;color:#64748b;font-size:11px;" id="lp-pm2p-${i}-${li}">
+                    ${saved.area&&saved.pedido?'R$ '+Math.round(saved.pedido/saved.area).toLocaleString('pt-BR'):'—'}
+                  </td>
+                  <td style="padding:3px 5px;"><input type="number" id="lp-neg-${i}-${li}" min="0" step="1000" value="${saved.negociado||''}" placeholder="—"
+                    style="width:110px;text-align:right;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:11px;"
+                    oninput="calcLotesPrecos(${i})"></td>
+                  <td style="padding:6px 10px;text-align:right;color:#64748b;font-size:11px;" id="lp-pm2n-${i}-${li}">
+                    ${saved.area&&saved.negociado?'R$ '+Math.round(saved.negociado/saved.area).toLocaleString('pt-BR'):'—'}
+                  </td>
+                  <td style="padding:3px 5px;"><input type="number" id="lp-perm-${i}-${li}" min="0" step="0.01" value="${saved.perm_area||''}" placeholder="—"
+                    style="width:80px;text-align:right;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:11px;"
+                    oninput="calcLotesPrecos(${i})"></td>
+                  <td style="padding:3px 5px;">
+                    <select id="lp-tipo-${i}-${li}" onchange="calcLotesPrecos(${i})"
+                      style="border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--sans);font-size:11px;background:#fff;color:#374151;">
+                      <option value="Residencial" ${(saved.perm_tipo||'Residencial')==='Residencial'?'selected':''}>Residencial</option>
+                      <option value="Loja" ${saved.perm_tipo==='Loja'?'selected':''}>Loja</option>
+                      <option value="NR" ${saved.perm_tipo==='NR'?'selected':''}>NR</option>
+                    </select>
+                  </td>
+                  <td style="padding:3px 5px;"><input type="number" id="lp-rperm-${i}-${li}" min="0" step="1000" value="${saved.perm_valor||''}" placeholder="—"
+                    style="width:110px;text-align:right;border:1px solid #e5e7eb;border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:11px;"
+                    oninput="calcLotesPrecos(${i})"></td>
+                  <td style="padding:6px 10px;text-align:right;color:#64748b;font-size:11px;" id="lp-pm2perm-${i}-${li}">
+                    ${saved.perm_area&&saved.perm_valor?'R$ '+Math.round(saved.perm_valor/saved.perm_area).toLocaleString('pt-BR'):'—'}
+                  </td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background:#e0f7f8;font-weight:700;border-top:2px solid #00B0BA;font-size:11px;" id="lp-total-${i}">
+                ${(()=>{
+                  let tA=0,tP=0,tN=0,tPA=0,tPV=0;
+                  _lotes.forEach(sql=>{ const s=(t.lotes_precos||{})[sql]||{}; tA+=(s.area||(t.lotes_areas||{})[sql]||0); tP+=s.pedido||0; tN+=s.negociado||0; tPA+=s.perm_area||0; tPV+=s.perm_valor||0; });
+                  const fmtR = v=>v>0?'R$ '+v.toLocaleString('pt-BR',{maximumFractionDigits:0}):'—';
+                  const fmtM2 = (v,a)=>(v>0&&a>0)?'R$ '+Math.round(v/a).toLocaleString('pt-BR'):'—';
+                  return `<td style="padding:6px 10px;color:#00B0BA;">TOTAL</td>
+                    <td style="padding:6px 10px;text-align:right;">${tA>0?tA.toLocaleString('pt-BR')+' m²':'—'}</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtR(tP)}</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtM2(tP,tA)}</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtR(tN)}</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtM2(tN,tA)}</td>
+                    <td style="padding:6px 10px;text-align:right;">${tPA>0?tPA.toLocaleString('pt-BR')+' m²':'—'}</td>
+                    <td style="padding:6px 10px;text-align:center;">—</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtR(tPV)}</td>
+                    <td style="padding:6px 10px;text-align:right;">${fmtM2(tPV,tPA)}</td>`;
+                })()}
+              </tr>
+            </tfoot>
+          </table>
+        </div>`; })()}
         <!-- SEÇÃO 1: HISTÓRICO / NOVA ENTRADA -->
         <div class="dash-ata-inline-wrap" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;">
           <div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
             <span style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:10px;">📋 Histórico de acompanhamento</span>
           </div>
           <div class="dash-ata-live-list" id="dal-${i}">
-            ${ataHtml||'<div class="dash-ata-empty">Nenhuma entrada ainda.</div>'}
+            ${obsHtml}
+            ${ataHtml||(!obsHtml?'<div class="dash-ata-empty">Nenhuma entrada ainda.</div>':'')}
           </div>
           <div style="border-top:1px dashed var(--border);margin:12px 0 10px;"></div>
           <div style="font-size:10px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">+ Nova entrada</div>
           <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
             <input type="date" id="dad-${i}" value="${new Date().toISOString().slice(0,10)}"
               style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);background:var(--bg);color:var(--text);flex-shrink:0;">
-            <select id="das-${i}"
-              style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);background:var(--bg);color:var(--text);flex:1;min-width:140px;">
-              <option value="">— status atual —</option>
-              <option value="1.Recebido">Recebido</option>
-              <option value="2.Estudo">Em Estudo</option>
-              <option value="3.Negociando">Negociando</option>
-              <option value="4.Análise">Análise</option>
-              <option value="6.Hold">Hold</option>
-              <option value="5.Frio">Frio</option>
-              <option value="8.Descartado">Descartado</option>
-            </select>
           </div>
           <textarea id="dai-${i}" class="dash-ata-textarea" rows="3"
             placeholder="O que aconteceu? Próximos passos…"
@@ -2912,7 +3094,7 @@ function renderAtaSection(){
                   ${Object.entries(r.lotes||{}).map(([sql,txt])=>`
                     <div style="margin-bottom:6px;">
                       <div style="font-size:11px;color:var(--accent);font-family:var(--mono);font-weight:700;">🔑 ${sql}</div>
-                      <div style="font-size:12px;color:var(--text);white-space:pre-wrap;padding-left:4px;">${escHtml(txt)}</div>
+                      <div style="font-size:12px;color:var(--text);white-space:pre-wrap;padding-left:4px;">${escHtml(typeof txt==='object'?JSON.stringify(txt):txt)}</div>
                     </div>`).join('')}
                 </div>
               </details>`).join('')}
@@ -2935,6 +3117,118 @@ function renderAtaSection(){
             <button onclick="openModal('${t.id}')" style="font-size:11px;font-family:var(--mono);padding:5px 14px;border-radius:20px;background:none;border:1px solid var(--border);cursor:pointer;color:var(--text);">✏ Editar terreno</button>
           </div>
         </div>
+
+        <!-- PROPOSTAS FORMAIS -->
+        <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:14px;margin-top:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;">📑 Propostas de Aquisição</span>
+            <button onclick="openPropostaModal('${t.id}',${i})"
+              style="padding:5px 13px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">+ Gerar Proposta</button>
+          </div>
+          <div id="prop-list-${i}">
+            ${(()=>{
+              const props_list = (t.propostas_formais||[]).slice().reverse();
+              if(!props_list.length) return '<div style="color:var(--muted);font-size:11px;font-family:var(--mono);">Nenhuma proposta gerada ainda.</div>';
+              return props_list.map((p,ri)=>`
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap;">
+                  <span style="font-size:11px;font-weight:700;color:#7c3aed;font-family:var(--mono);">Rev${String(props_list.length-ri).padStart(2,'0')}</span>
+                  <span style="font-size:11px;color:var(--text);flex:1;">${escHtml(p.modelo_label||'')} — ${escHtml(p.proprietario||'')} — ${escHtml(p.data_proposta||'')}</span>
+                  <button onclick="downloadPropostaRev('${t.id}',${props_list.length-1-ri},'docx')"
+                    style="padding:3px 8px;border-radius:5px;border:1px solid #7c3aed55;background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;cursor:pointer;">📄 DOCX</button>
+                  <button onclick="downloadPropostaRev('${t.id}',${props_list.length-1-ri},'pdf')"
+                    style="padding:3px 8px;border-radius:5px;border:1px solid #0596691f;background:#f0fdf4;color:#059669;font-size:10px;font-weight:600;cursor:pointer;">📥 PDF</button>
+                </div>`).join('');
+            })()}
+          </div>
+        </div>
+
+        </div><!-- /lt-geral -->
+
+        <!-- PANES POR SQL -->
+        ${(()=>{
+          const _sqlTabs = (t.lotes&&t.lotes.length) ? t.lotes.filter(s=>s) : [];
+          return _sqlTabs.map((sql,li)=>{
+            const props   = ((t.lotes_propostas||{})[sql]||[]).sort((a,b)=>b.data.localeCompare(a.data));
+            const docs    = (t.lotes_docs||{})[sql]||[];
+            const area    = (t.lotes_areas||{})[sql]||'';
+            const sqlPdfs = ((t.lotes_pdfs||{})[sql])||{};
+            return `<div id="lt-${i}-${li}" class="lote-tab-pane">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+                <span style="font-size:13px;font-weight:700;color:var(--accent);font-family:var(--mono);">🔑 ${sql}</span>
+                ${area?`<span style="font-size:11px;color:var(--muted);font-family:var(--mono);">📐 ${area} m²</span>`:''}
+              </div>
+
+              <!-- Propostas -->
+              <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                  <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);">📝 Propostas</span>
+                  <button onclick="openPropostaModal('${t.id}',${i},'${escHtml(sql)}')"
+                    style="padding:4px 11px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;">📑 Elaborar proposta</button>
+                </div>
+                <div id="lp-draft-${i}-${li}">${_buildDraftCard(t.id, sql, i, li)}</div>
+                <div id="lp-list-${i}-${li}" style="max-height:160px;overflow-y:auto;margin-bottom:8px;">
+                  ${props.length ? props.map(p=>`
+                    <div style="padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:12px;">
+                      <span style="font-size:10px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-right:6px;">${p.data||''}</span>
+                      <span style="color:var(--text);white-space:pre-wrap;">${escHtml(p.texto)}</span>
+                    </div>`).join('') : '<div style="color:var(--muted);font-size:11px;font-family:var(--mono);">Nenhuma proposta ainda.</div>'}
+                </div>
+                <textarea id="lp-inp-${i}-${li}" rows="2" placeholder="Descreva a proposta…"
+                  style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);resize:vertical;box-sizing:border-box;"></textarea>
+                <div style="display:flex;gap:6px;margin-top:6px;align-items:center;">
+                  <input type="date" id="lp-date-${i}-${li}" value="${new Date().toISOString().slice(0,10)}"
+                    style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-family:var(--mono);">
+                  <button onclick="addLoteProposta('${t.id}',${i},${li},'${sql}')"
+                    style="padding:5px 14px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">+ Salvar</button>
+                </div>
+              </div>
+
+              <!-- Documentos -->
+              <div style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;">
+                <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#7c3aed;margin-bottom:10px;">📎 Documentos</div>
+
+                <!-- Matrícula -->
+                <div id="doc-row-${i}-${li}-matricula"
+                  ondragover="event.preventDefault();this.style.outline='2px dashed #7c3aed';"
+                  ondragleave="this.style.outline='';"
+                  ondrop="onDocRowDrop(event,'${t.id}','${escHtml(sql)}',${i},${li},'matricula');this.style.outline='';">
+                  ${_buildDocRowHtml(t.id, escHtml(sql), i, li, 'matricula', '📋 Matrícula', sqlPdfs.matricula||null)}
+                </div>
+
+                <!-- IPTU -->
+                <div id="doc-row-${i}-${li}-iptu"
+                  ondragover="event.preventDefault();this.style.outline='2px dashed #7c3aed';"
+                  ondragleave="this.style.outline='';"
+                  ondrop="onDocRowDrop(event,'${t.id}','${escHtml(sql)}',${i},${li},'iptu');this.style.outline='';">
+                  ${_buildDocRowHtml(t.id, escHtml(sql), i, li, 'iptu', '🏛 IPTU', sqlPdfs.iptu||null)}
+                </div>
+
+                <!-- Outros documentos -->
+                <div style="margin-top:10px;">
+                  <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Outros documentos</div>
+                  <div id="ld-list-${i}-${li}" style="margin-bottom:8px;">
+                    ${docs.length ? docs.map((d,di)=>`
+                      <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:12px;">
+                        ${d.link?`<a href="${escHtml(d.link)}" target="_blank" style="color:#7c3aed;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">📄 ${escHtml(d.nome||d.link)}</a>`
+                          :`<span style="flex:1;color:var(--text);">📄 ${escHtml(d.nome)}</span>`}
+                        <button onclick="deleteLoteDoc('${t.id}',${i},${li},'${sql}',${di})"
+                          style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #f8717144;background:#fff5f5;color:#ef4444;cursor:pointer;">✕</button>
+                      </div>`).join('') : '<div style="color:var(--muted);font-size:11px;font-family:var(--mono);">Nenhum documento ainda.</div>'}
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                    <input type="text" id="ld-nome-${i}-${li}" placeholder="Nome do documento"
+                      style="flex:1;min-width:120px;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);">
+                    <input type="text" id="ld-link-${i}-${li}" placeholder="Link (opcional)"
+                      style="flex:2;min-width:160px;font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--sans);">
+                    <button onclick="addLoteDoc('${t.id}',${i},${li},'${sql}')"
+                      style="padding:5px 12px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">+ Add</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('');
+        })()}
+
       </div>
       <div class="dash-ata-panel" id="ap${i}-estudo"
         style="border:1.5px solid #7c3aed44;border-radius:10px;padding:16px;background:#faf5ff;margin-top:6px;">
@@ -2949,16 +3243,9 @@ function renderAtaSection(){
         <div id="tab-estudo-${i}">${renderEstudoMassaPreview(t, i)}</div>
       </div>
       <div class="dash-ata-panel" id="ap${i}-viab"
-        style="border:1.5px solid #05966944;border-radius:10px;padding:16px;background:#f0fdf4;margin-top:6px;">
+        style="border:1.5px solid #05966944;border-radius:10px;padding:12px;background:#f0fdf4;margin-top:6px;">
         <button onclick="closeAtaModal()" style="display:none;float:right;background:#f3f4f6;border:none;border-radius:20px;padding:4px 14px;cursor:pointer;font-size:20px;color:#6b7280;margin-bottom:8px;" class="ata-close-x">✕</button>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-          <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;">💰 Viabilidade — ${t.endereco}</span>
-          <label style="padding:5px 14px;border-radius:6px;background:#059669;color:#fff;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">
-            📤 Carregar Excel
-            <input type="file" accept=".xlsx,.xls" style="display:none" onchange="uploadTabExcel(this,'${t.id}','viabilidade',${i},'viab')">
-          </label>
-        </div>
-        <div id="tab-viab-${i}">${renderTabData(t.viabilidade,'viab')}</div>
+        <div id="tab-viab-${i}"><div style="color:#aaa;font-size:12px;padding:8px;">Abrindo planilha...</div></div>
       </div>`;
   }).join('');
 }
@@ -2982,6 +3269,517 @@ function renderTabData(data, type){
   return html2;
 }
 
+// ── VIABILIDADE SPREADSHEET RENDERER ─────────────────────────────────────────
+
+function colToLetter(n){
+  let s='';
+  while(n>0){ n--; s=String.fromCharCode(65+(n%26))+s; n=Math.floor(n/26); }
+  return s;
+}
+function letterToCol(s){
+  let n=0;
+  for(let i=0;i<s.length;i++) n=n*26+(s.toUpperCase().charCodeAt(i)-64);
+  return n;
+}
+function coordToRC(coord){
+  const m=coord.match(/^([A-Za-z]+)(\d+)$/);
+  if(!m) return null;
+  return {r:parseInt(m[2]),c:letterToCol(m[1])};
+}
+
+// ── Excel number format → display string ──────────────────────────────────────
+const _MONTHS_EN=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const _MONTHS_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function applyExcelFmt(rawVal, fmtStr){
+  if(rawVal===null||rawVal===undefined||rawVal==='') return '';
+
+  // Date values
+  const isDateFmt = /\[.*\].*mmm|d.*mmm|mmm.*yy/i.test(fmtStr);
+  if(isDateFmt || (typeof rawVal==='string' && (rawVal.includes('T00:00') || rawVal.includes(' 00:00:00')))){
+    try{
+      const d = new Date(String(rawVal).replace(' ','T'));
+      if(isNaN(d)) return String(rawVal);
+      // Use Portuguese month names for Brazilian locale ([$-416] or default)
+      const isPtLocale = fmtStr.includes('[$-416]') || !fmtStr.includes('[$-409]');
+      const MONTHS_LONG_PT=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+      const isFullMonth = /mmmm/i.test(fmtStr);
+      const m = isPtLocale
+        ? (isFullMonth ? MONTHS_LONG_PT[d.getMonth()] : _MONTHS_PT[d.getMonth()])
+        : _MONTHS_EN[d.getMonth()];
+      const day = d.getDate();
+      const yr = String(d.getFullYear()).slice(2);
+      if(/d.*mmm.*yy/i.test(fmtStr)) return `${day}-${m}-${yr}`;
+      return `${m}-${yr}`;
+    }catch(e){ return String(rawVal); }
+  }
+
+  const num = parseFloat(rawVal);
+  if(isNaN(num)) return String(rawVal);
+
+  // Extract prefix text literals e.g. "Terr."\ 0 → "Terr. 1"
+  const prefixMatch = fmtStr.match(/^"([^"]+)"/);
+  const prefix = prefixMatch ? prefixMatch[1] : '';
+  if(prefix){
+    const rest = fmtStr.slice(prefixMatch[0].length).replace(/^\\ /,'').replace(/^[ ]+/,'');
+    if(/^[#0,]+$/.test(rest)){
+      return prefix + ' ' + fmtToLocal(num, 0);
+    }
+  }
+  const suffix = (fmtStr.match(/"([^"]+)"$/) || [])[1] || '';
+
+  // Check for inline suffix like \  "m²" or "meses"
+  const inlineSuffix = (fmtStr.match(/\\ "([^"]+)"/) || fmtStr.match(/ "([^"]+)"/) || [])[1] || suffix;
+
+  // Percentage
+  if(fmtStr.includes('%')){
+    const dec = (fmtStr.match(/0\.(0+)%/) || [])[1]?.length || 0;
+    const s = (num*100).toFixed(dec).replace('.',',');
+    return s + '%';
+  }
+
+  // Special: "R$ "#,##0"/ m²"
+  if(fmtStr.includes('"/ m²"') || fmtStr.includes('/ m²')){
+    const dec = fmtStr.includes('.00') ? 2 : 0;
+    const s = fmtToLocal(num, dec);
+    return `R$ ${s}/ m²`;
+  }
+
+  // "m²" suffix
+  if(fmtStr.includes('"m²"') || fmtStr.includes('\\ "m²"')){
+    const dec = fmtStr.includes('.00') ? 2 : 0;
+    return fmtToLocal(num, dec) + ' m²';
+  }
+
+  // "meses" suffix
+  if(fmtStr.includes('"meses"')){
+    return fmtToLocal(num, 0) + ' meses';
+  }
+
+  // Accounting R$ format: _("R$"* #,##0...)
+  if(fmtStr.includes('"R$"') || fmtStr.includes('R$')){
+    if(num===0 && fmtStr.includes('"-"')) return 'R$ -';
+    const dec = fmtStr.includes('.00') ? 2 : 0;
+    const neg = num < 0;
+    const s = fmtToLocal(Math.abs(num), dec);
+    return neg ? `-R$ ${s}` : `R$ ${s}`;
+  }
+
+  // Standard numeric with thousands
+  if(fmtStr.includes('#,##0') || fmtStr.includes(',##0')){
+    const dec = (fmtStr.match(/0\.(0+)/) || [])[1]?.length || 0;
+    const neg = num < 0;
+    const s = fmtToLocal(Math.abs(num), dec);
+    return neg ? `-${prefix}${s}${inlineSuffix}` : `${prefix}${s}${inlineSuffix}`;
+  }
+
+  return String(rawVal);
+}
+
+function fmtToLocal(num, dec){
+  // Brazilian: period=thousands, comma=decimal
+  let s = num.toFixed(dec);
+  const parts = s.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return dec > 0 ? parts[0]+','+parts[1] : parts[0];
+}
+
+// Premissas live value store: coord -> value (for real-time calc)
+const _viabPremCache = {};
+const _viabApoioCache = {};
+
+function _initViabCache(){
+  if(!window.VIAB_DATA) return;
+  const pc = VIAB_DATA.cache['Premissas']||{};
+  Object.assign(_viabPremCache, pc);
+  const ac = VIAB_DATA.cache['Apoio']||{};
+  Object.assign(_viabApoioCache, ac);
+}
+
+function initViabPanel(terrenoId, panelIdx){
+  if(typeof VIAB_DATA === 'undefined'){
+    const el=document.getElementById('tab-viab-'+panelIdx);
+    if(el) el.innerHTML='<div style="color:#f87171;padding:8px;font-size:12px;">⚠ Arquivo viab_data.js não encontrado na mesma pasta do index.html.</div>';
+    return;
+  }
+  _initViabCache();
+  const el=document.getElementById('tab-viab-'+panelIdx);
+  if(!el) return;
+
+  el.innerHTML=`
+    <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+      <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#059669;">💰 Viabilidade — Planilha</span>
+      <button onclick="downloadViabExcel('${terrenoId}')" style="padding:5px 14px;background:#059669;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;font-family:var(--sans);">📥 Baixar Excel preenchido</button>
+    </div>
+    <div style="display:flex;gap:0;margin-bottom:0;border-bottom:2px solid #05966940;">
+      <button id="vtab-rel-${panelIdx}" onclick="switchViabTab('rel','${terrenoId}',${panelIdx})"
+        style="padding:6px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#059669;color:#fff;border-radius:6px 6px 0 0;font-family:var(--sans);">
+        📊 Relatório</button>
+      <button id="vtab-apoio-${panelIdx}" onclick="switchViabTab('apoio','${terrenoId}',${panelIdx})"
+        style="padding:6px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#e8f5e9;color:#059669;border-radius:6px 6px 0 0;font-family:var(--sans);margin-left:3px;">
+        📋 Apoio</button>
+      <button id="vtab-prem-${panelIdx}" onclick="switchViabTab('prem','${terrenoId}',${panelIdx})"
+        style="padding:6px 14px;font-size:11px;font-weight:700;border:none;cursor:pointer;background:#e8f5e9;color:#059669;border-radius:6px 6px 0 0;font-family:var(--sans);margin-left:3px;">
+        ⚙️ Premissas</button>
+    </div>
+    <div id="vs-rel-${panelIdx}" style="background:#fff;border:1px solid #05966930;border-top:none;border-radius:0 0 8px 8px;">
+      <div id="vs-rel-inner-${panelIdx}" style="overflow-y:auto;overflow-x:auto;max-height:80vh;">
+        <div id="vs-rel-scale-${panelIdx}">
+          ${buildViabTable('Relatório (2)', terrenoId, panelIdx)}
+        </div>
+      </div>
+    </div>
+    <div id="vs-apoio-${panelIdx}" style="display:none;background:#fff;border:1px solid #05966930;border-top:none;border-radius:0 0 8px 8px;">
+      <div id="vs-apoio-inner-${panelIdx}" style="overflow-y:auto;overflow-x:auto;max-height:80vh;">
+        <div id="vs-apoio-scale-${panelIdx}">
+          ${buildViabTable('Apoio', terrenoId, panelIdx)}
+        </div>
+      </div>
+    </div>
+    <div id="vs-prem-${panelIdx}" style="display:none;background:#fff;border:1px solid #05966930;border-top:none;border-radius:0 0 8px 8px;">
+      <div id="vs-prem-inner-${panelIdx}" style="overflow-y:auto;overflow-x:auto;max-height:80vh;">
+        <div id="vs-prem-scale-${panelIdx}">
+          ${buildViabTable('Premissas', terrenoId, panelIdx)}
+        </div>
+      </div>
+    </div>
+    <div style="font-size:10px;color:#9ca3af;margin-top:6px;">
+      💡 Células amarelas = editáveis. Resultados do Relatório atualizam automaticamente.
+    </div>`;
+
+  loadViabInputs(terrenoId, panelIdx);
+  // Auto-fit tables to container width
+  setTimeout(()=>fitViabTables(panelIdx), 80);
+}
+
+function fitViabTables(panelIdx){
+  // No scaling — modal is now wide enough to show at 1:1
+  // Just ensure the inner scroll height is set
+  ['rel','apoio','prem'].forEach(k=>{
+    const inner=document.getElementById('vs-'+k+'-inner-'+panelIdx);
+    if(inner) inner.style.maxHeight='80vh';
+  });
+}
+
+function switchViabTab(tab, terrenoId, panelIdx){
+  ['rel','apoio','prem'].forEach(k=>{
+    const btn=document.getElementById('vtab-'+k+'-'+panelIdx);
+    const sheet=document.getElementById('vs-'+k+'-'+panelIdx);
+    if(btn && sheet){
+      const active=k===tab;
+      btn.style.background=active?'#059669':'#e8f5e9';
+      btn.style.color=active?'#fff':'#059669';
+      sheet.style.display=active?'block':'none';
+    }
+  });
+  setTimeout(()=>fitViabTables(panelIdx), 30);
+}
+
+function buildViabTable(sheetName, terrenoId, panelIdx){
+  const sheetData = VIAB_DATA.sheets[sheetName];
+  if(!sheetData) return '<div style="padding:12px;color:#aaa;">Sheet não encontrado</div>';
+
+  const cellMap={};
+  sheetData.cells.forEach(c=>{ cellMap[c.r+','+c.c]=c; });
+
+  // Apoio: pre-fill Lote (col 2) and Dinheiro R$ (col 8) from terreno data
+  const _apoioTerreno = sheetName==='Apoio' ? (terrenos.find(t=>t.id===terrenoId)||null) : null;
+  const _apoioLotes   = _apoioTerreno?.lotes||[];
+  const _apoioPrecos  = _apoioTerreno?.lotes_precos||{};
+
+  const skip=new Set();
+  // Format today for cells with =TODAY()
+  const todayFmt=(()=>{
+    const d=new Date();
+    const m=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][d.getMonth()];
+    return `${String(d.getDate()).padStart(2,'0')}-${m}-${String(d.getFullYear()).slice(2)}`;
+  })();
+
+  let html='<table class="viab-table" style="border-collapse:collapse;font-size:11px;font-family:Calibri,Arial,sans-serif;white-space:nowrap;table-layout:fixed;border:1px solid #e0e0e0;"><colgroup>';
+  for(let c=1;c<=sheetData.max_col;c++){
+    const cl=colToLetter(c);
+    const w=(sheetData.cw&&sheetData.cw[cl])||60;
+    html+=`<col style="min-width:${Math.max(w,30)}px;width:${Math.max(w,30)}px">`;
+  }
+  html+='</colgroup>';
+
+  const startRow = (sheetName==='Apoio'||sheetName==='Premissas') ? 2 : 1;
+  // Detect input rows (for yellow fill propagation)
+  const inputRows = new Set();
+  if(sheetName==='Apoio'||sheetName==='Premissas') sheetData.cells.forEach(c=>{ if(c.i) inputRows.add(c.r); });
+
+  // Row groups / hidden rows (Premissas) — stored as ranges [[start,end],...]
+  const hiddenRowSet = new Set();
+  (sheetData.hidden_rows||[]).forEach(r=>hiddenRowSet.add(r));
+  (sheetData.hidden_ranges||[]).forEach(([s,e])=>{ for(let r=s;r<=e;r++) hiddenRowSet.add(r); });
+  const rowGroups = sheetData.row_groups||{};
+  // Track which groups are collapsed (default = collapsed for initially hidden rows)
+  // Build group spans: find contiguous runs of hidden rows
+  const groupSpans = []; // [{start, end, collapsed}]
+  let gi=0, hr=Array.from(hiddenRowSet).sort((a,b)=>a-b);
+  while(gi<hr.length){
+    let s=hr[gi], e=hr[gi];
+    while(gi+1<hr.length && hr[gi+1]===e+1){ gi++; e=hr[gi]; }
+    groupSpans.push({start:s, end:e, id:`grp-${panelIdx}-${s}`});
+    gi++;
+  }
+  // Map: row -> groupSpan it belongs to
+  const rowToGroup = {};
+  groupSpans.forEach(g=>{ for(let r=g.start;r<=g.end;r++) rowToGroup[r]=g; });
+
+  for(let r=startRow;r<=sheetData.max_row;r++){
+    // Insert "+" expand button row just before a group starts
+    const grpStarting = groupSpans.find(g=>g.start===r);
+    if(grpStarting){
+      const numCols = sheetData.max_col;
+      html+=`<tr class="viab-grp-btn" data-grp="${grpStarting.id}">
+        <td colspan="${numCols}" style="background:#f0f0f0;border-bottom:1px solid #ccc;padding:0 6px;height:14px;cursor:pointer;user-select:none;"
+          onclick="toggleViabGroup('${grpStarting.id}',this)">
+          <span id="${grpStarting.id}-icon" style="display:inline-block;width:14px;height:14px;line-height:14px;text-align:center;border:1px solid #999;background:#fff;font-size:10px;font-weight:bold;margin-right:4px;">+</span>
+          <span style="font-size:10px;color:#666;">${grpStarting.end-grpStarting.start+1} linhas ocultas</span>
+        </td></tr>`;
+    }
+    // Hidden rows: render but hidden, tagged with group id for toggle
+    if(hiddenRowSet.has(r)){
+      const g=rowToGroup[r];
+      html+=`<tr data-viab-grp="${g?g.id:''}" style="display:none;">`;
+    } else {
+      html+='<tr>';
+    }
+    for(let c=1;c<=sheetData.max_col;c++){
+      const key=r+','+c;
+      if(skip.has(key)){ continue; }
+      // YUNY logo cell (row 2, col 1-2) for Relatorio
+      if(sheetName==='Relatório (2)' && r===2 && c===1){
+        skip.add('2,2');
+        html+='<td colspan="2" style="background:#00B0B9;padding:4px 10px;white-space:nowrap;vertical-align:middle;">'
+          +'<span style="font-family:\'Calibri\',\'Arial Narrow\',sans-serif;font-weight:900;font-size:17px;color:#fff;letter-spacing:1.5px;text-transform:lowercase;">yuny</span>'
+          +'</td>';
+        continue;
+      }
+      const cell=cellMap[key];
+      if(!cell){
+        html+=`<td style="padding:0 3px;height:17px;"></td>`;
+        continue;
+      }
+      // Mark merged spans to skip
+      if(cell.rs>1||cell.cs>1){
+        for(let dr=0;dr<(cell.rs||1);dr++)
+          for(let dc=0;dc<(cell.cs||1);dc++)
+            if(dr||dc) skip.add((r+dr)+','+(c+dc));
+      }
+      // Per-sheet style rules
+      const isApoio = sheetName==='Apoio';
+      const isPrem  = sheetName==='Premissas';
+      // Use extracted per-cell border info (br = 'BTLR' flags)
+      // For Premissas: only show borders on cells with explicit bg (avoids showing Excel's default thin gridlines)
+      let borderStyle='border:none;';
+      if(cell.br && (!isPrem || cell.bg)){
+        const br=cell.br;
+        const b='1px solid #b0b0b0';
+        borderStyle=`border-top:${br.includes('T')?b:'none'};border-bottom:${br.includes('B')?b:'none'};border-left:${br.includes('L')?b:'none'};border-right:${br.includes('R')?b:'none'};`;
+      } else if(isPrem && !cell.bg && cell.b && cell.br && (cell.br.includes('T')||cell.br.includes('B'))){
+        // Show only ONE horizontal border per bold section-label cell to avoid double-lines.
+        // When cell has T (with or without B), show only T — the separator before the label.
+        // When cell has only B (no T), show B — the separator after the label.
+        // This matches Excel's merged-border rendering where adjacent rows share one visible line.
+        const b='1px solid #b0b0b0';
+        const hasT=cell.br.includes('T'), hasB=cell.br.includes('B');
+        if(hasT) borderStyle=`border-top:${b};`;
+        else if(hasB) borderStyle=`border-bottom:${b};`;
+      }
+      let style=borderStyle+'padding:1px 3px;height:17px;vertical-align:middle;overflow:hidden;font-size:11px;';
+      let bgIsDark = false;
+      if(cell.bg){
+        style+=`background:${cell.bg};`;
+        // Check if background is dark → use light text
+        const hex = cell.bg.replace('#','');
+        if(hex.length===6){
+          const r2=parseInt(hex.slice(0,2),16), g2=parseInt(hex.slice(2,4),16), b2=parseInt(hex.slice(4,6),16);
+          // Perceived luminance
+          bgIsDark = (0.299*r2 + 0.587*g2 + 0.114*b2) < 140;
+        }
+      }
+      // Apoio only: propagate yellow to input rows, gray to formula cells
+      else if(isApoio && cell.br && inputRows.has(r)) style+='background:#ffffcc;';
+      else if(isApoio && cell.br) style+='background:#efefef;';
+      if(cell.b)  style+='font-weight:700;';
+      if(cell.it) style+='font-style:italic;';
+      const fcOverride = (window.VIAB_FC||{})[sheetName]?.[`${r}_${c}`];
+      const fc = cell.fc || fcOverride;
+      if(fc) style+=`color:${fc};`;
+      else if(bgIsDark) style+='color:#ffffff;';
+      if(cell.a) style+=`text-align:${cell.a};`;
+      else if(isApoio) style+='text-align:center;';
+      else if(!isNaN(parseFloat(cell.v))&&cell.v!=='') style+='text-align:right;';
+
+      const rsAttr=cell.rs>1?` rowspan="${cell.rs}"`:'';
+      const csAttr=cell.cs>1?` colspan="${cell.cs}"`:'';
+      const cl=colToLetter(c);
+      const coord=cl+r;
+      const skey=sheetName.replace(/[^a-z0-9]/gi,'_');
+      const cellId=`vc-${panelIdx}-${skey}-${coord}`;
+
+      // Apply Excel format to get display value
+      let displayVal;
+      const isExcelErr = v => typeof v==='string' && /^#(DIV\/0!|REF!|NAME\?|VALUE!|N\/A|NULL!|NUM!)/.test(v);
+      if(cell.f==='=TODAY()'){
+        displayVal=todayFmt;
+      } else if(isExcelErr(cell.v)){
+        displayVal='–';
+      } else if(cell.raw!==undefined && cell.fmt){
+        displayVal=applyExcelFmt(cell.raw, cell.fmt);
+      } else if(cell.raw!==undefined && !cell.fmt){
+        // Plain number, no special format
+        const n=parseFloat(cell.raw);
+        displayVal=isNaN(n)?String(cell.raw):fmtToLocal(n, Number.isInteger(n)?0:2);
+      } else {
+        displayVal=cell.v||'';
+      }
+
+      // Apoio: pre-fill Lote (col 2) and Dinheiro R$ (col 8) for rows 3-10
+      if(isApoio && r>=3 && r<=10){
+        const sql = _apoioLotes[r-3]||'';
+        if(c===2 && sql) displayVal = sql;
+        if(c===8 && sql){
+          const neg = _apoioPrecos[sql]?.negociado;
+          if(neg) displayVal = String(neg);
+        }
+      }
+
+      if(cell.i){
+        html+=`<td${rsAttr}${csAttr} style="${style}padding:0;"><input
+          id="${cellId}" class="viab-inp"
+          data-sheet="${sheetName}" data-coord="${coord}"
+          data-terreno="${terrenoId}" data-panel="${panelIdx}"
+          value="${escHtml(displayVal)}"
+          oninput="viabInputChanged(this)"
+          style="width:100%;height:17px;border:none;background:#ffffcc;font-size:11px;font-family:Calibri,Arial,sans-serif;padding:1px 3px;box-sizing:border-box;text-align:${isApoio?'center':'right'};"></td>`;
+      } else {
+        html+=`<td${rsAttr}${csAttr} id="${cellId}" style="${style}">${escHtml(displayVal)}</td>`;
+      }
+    }
+    html+='</tr>';
+  }
+  html+='</table>';
+  return html;
+}
+
+function toggleViabGroup(grpId, btnTd){
+  const icon = document.getElementById(grpId+'-icon');
+  const isCollapsed = icon && icon.textContent==='+';
+  // Find all TR rows belonging to this group (they follow the button row until next group/normal row)
+  const table = btnTd.closest('table');
+  const rows = Array.from(table.querySelectorAll(`tr[data-viab-grp="${grpId}"]`));
+  rows.forEach(tr=>{ tr.style.display = isCollapsed ? '' : 'none'; });
+  if(icon) icon.textContent = isCollapsed ? '−' : '+';
+}
+
+function viabInputChanged(inp){
+  const sheet=inp.dataset.sheet;
+  const coord=inp.dataset.coord;
+  const val=inp.value;
+
+  // Update live cache
+  if(sheet==='Premissas') _viabPremCache[coord]=isNaN(parseFloat(val))?val:parseFloat(val);
+  if(sheet==='Apoio') _viabApoioCache[coord]=isNaN(parseFloat(val))?val:parseFloat(val);
+
+  // Debounce recalc
+  clearTimeout(inp._t);
+  inp._t=setTimeout(()=>{
+    const panelIdx=inp.dataset.panel;
+    const terrenoId=inp.dataset.terreno;
+    recalcViabRelatorio(panelIdx);
+    saveViabInputs(terrenoId, panelIdx);
+  }, 600);
+}
+
+function evalViabFormula(fml, sheetName, panelIdx){
+  if(!fml||!fml.startsWith('=')) return null;
+  try{
+    // TODAY()
+    if(fml==='=TODAY()') return new Date().toLocaleDateString('pt-BR');
+
+    // Pure Premissas reference: =Premissas!XY
+    const premRef=fml.match(/^=Premissas!([A-Z]+\d+)$/i);
+    if(premRef){
+      const v=_viabPremCache[premRef[1].toUpperCase()];
+      return v!==undefined?v:null;
+    }
+    // Named range dbase
+    if(fml==='=dbase') return _viabPremCache['E5']||new Date().toLocaleDateString('pt-BR');
+
+    // String concat with Premissas: ="Projeto: " & Premissas!XY
+    const concatM=fml.match(/^="([^"]*)"&\s*Premissas!([A-Z]+\d+)$/i);
+    if(concatM){
+      const v=_viabPremCache[concatM[2].toUpperCase()]||'';
+      return concatM[1]+v;
+    }
+
+    return null; // complex formula — keep cached
+  }catch(e){ return null; }
+}
+
+function recalcViabRelatorio(panelIdx){
+  if(!window.VIAB_DATA) return;
+  const formulas=VIAB_DATA.formulas['Relatório (2)']||{};
+  const skey='Relat_rio__2_';
+  for(const [coord, fml] of Object.entries(formulas)){
+    const result=evalViabFormula(fml, 'Relatório (2)', panelIdx);
+    if(result!==null){
+      const cellId=`vc-${panelIdx}-Relat_rio__2_-${coord}`;
+      const el=document.getElementById(cellId);
+      if(el) el.textContent=typeof result==='number'?result.toLocaleString('pt-BR',{maximumFractionDigits:2}):result;
+    }
+  }
+}
+
+async function saveViabInputs(terrenoId, panelIdx){
+  const inputs={};
+  document.querySelectorAll(`.viab-inp[data-terreno="${terrenoId}"]`).forEach(inp=>{
+    const k=inp.dataset.sheet+'|'+inp.dataset.coord;
+    inputs[k]=inp.value;
+  });
+  try{
+    await db.collection('terrenos').doc(terrenoId).update({'viab_inputs':inputs});
+  }catch(e){ console.warn('saveViabInputs:',e); }
+}
+
+function loadViabInputs(terrenoId, panelIdx){
+  const t=terrenos.find(x=>x.id===terrenoId);
+  if(!t||!t.viab_inputs) return;
+  Object.entries(t.viab_inputs).forEach(([k,v])=>{
+    const [sheet,coord]=k.split('|');
+    const skey=sheet.replace(/[^a-z0-9]/gi,'_');
+    const cellId=`vc-${panelIdx}-${skey}-${coord}`;
+    const el=document.getElementById(cellId);
+    if(el && el.tagName==='INPUT') el.value=v;
+    // Also update cache
+    if(sheet==='Premissas') _viabPremCache[coord]=isNaN(parseFloat(v))?v:parseFloat(v);
+    if(sheet==='Apoio') _viabApoioCache[coord]=isNaN(parseFloat(v))?v:parseFloat(v);
+  });
+  recalcViabRelatorio(panelIdx);
+}
+
+function downloadViabExcel(terrenoId){
+  // Build a workbook with updated inputs using SheetJS
+  if(typeof XLSX==='undefined'){ alert('SheetJS não carregado.'); return; }
+  const t=terrenos.find(x=>x.id===terrenoId);
+  // Create simple export with input values
+  const wb=XLSX.utils.book_new();
+  const rows=[['Sheet','Célula','Valor']];
+  if(t&&t.viab_inputs){
+    Object.entries(t.viab_inputs).forEach(([k,v])=>{
+      const [sheet,coord]=k.split('|');
+      rows.push([sheet,coord,v]);
+    });
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,'Inputs preenchidos',ws);
+  XLSX.writeFile(wb,`Viabilidade_${(t&&t.endereco)||terrenoId}_inputs.xlsx`);
+  alert('📥 Arquivo com inputs exportado!\n\nCopie os valores para a planilha "Viabilidade Padrão - REV 22 claude.xlsm" nas células indicadas para ver os cálculos completos.');
+}
+
 async function uploadTabExcel(input, terrenoId, field, panelIdx, tabKey){
   const file = input.files[0];
   if(!file) return;
@@ -3001,15 +3799,31 @@ async function uploadTabExcel(input, terrenoId, field, panelIdx, tabKey){
   reader.readAsBinaryString(file);
 }
 
-function closeAtaModal(){
-  // Clear the modal wrap and hide
+function expandModalForViab(){
   const wrap = document.getElementById('ata-modal-wrap');
-  if(wrap){ wrap.innerHTML=''; wrap.style.display='none'; wrap._activePanelId=null; }
+  if(wrap){
+    wrap.style.width = 'min(1520px, 97vw)';
+    wrap.style.maxHeight = '94vh';
+    wrap.style.padding = '16px 20px';
+    wrap._viabMode = true;
+  }
+}
+
+function closeAtaModal(){
+  const wrap = document.getElementById('ata-modal-wrap');
+  if(wrap){
+    wrap.innerHTML=''; wrap.style.display='none'; wrap._activePanelId=null;
+    if(wrap._viabMode){
+      wrap.style.width='min(860px,92vw)';
+      wrap.style.maxHeight='88vh';
+      wrap.style.padding='24px 28px';
+      wrap._viabMode=false;
+    }
+  }
   const ov = document.getElementById('ata-modal-overlay');
   if(ov) ov.style.display='none';
   document.querySelectorAll('.dash-ata-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.dash-tab-btn').forEach(b=>{ b.style.opacity='0.75'; });
-  // Rebuild panels in their original positions
   renderAtaSection();
 }
 
@@ -3175,6 +3989,117 @@ async function addDashTodo(terrenoId, panelIdx){
   }
 }
 
+
+// Evaluate a formula like "=500*52" or plain number. Returns float.
+function evalLpExpr(val){
+  if(!val) return 0;
+  val = String(val).trim();
+  if(val.startsWith('=')){
+    try{
+      const expr = val.slice(1).replace(/[^0-9+\-*/().\s]/g,'');
+      // eslint-disable-next-line no-new-func
+      return parseFloat(Function('"use strict";return('+expr+')')())||0;
+    }catch(e){ return 0; }
+  }
+  return parseFloat(val.replace(/\./g,'').replace(',','.'))||0;
+}
+
+// On blur: resolve formula → show computed number in the field
+function resolveLpFormula(inp, pi){
+  const val = inp.value.trim();
+  if(val.startsWith('=')){
+    const result = evalLpExpr(val);
+    if(result) inp.value = result;
+  }
+  calcLotesPrecos(pi);
+}
+
+function calcLotesPrecos(pi){
+  const t = terrenos.find(x=>{
+    // find terreno matching this panel index
+    const el = document.getElementById(`lp-area-${pi}-0`);
+    return el; // just recalculate totals from DOM
+  });
+  const fmtR = v=>v>0?'R$ '+v.toLocaleString('pt-BR',{maximumFractionDigits:0}):'—';
+  const fmtM2 = (v,a)=>(v>0&&a>0)?'R$ '+Math.round(v/a).toLocaleString('pt-BR'):'—';
+  let tA=0,tP=0,tN=0,tPA=0,tPV=0, li=0;
+  while(document.getElementById(`lp-area-${pi}-${li}`)){
+    const a  = parseFloat(document.getElementById(`lp-area-${pi}-${li}`)?.value)||0;
+    const p  = evalLpExpr(document.getElementById(`lp-ped-${pi}-${li}`)?.value);
+    const n  = parseFloat(document.getElementById(`lp-neg-${pi}-${li}`)?.value)||0;
+    const pa = parseFloat(document.getElementById(`lp-perm-${pi}-${li}`)?.value)||0;
+    const pv = parseFloat(document.getElementById(`lp-rperm-${pi}-${li}`)?.value)||0;
+    tA+=a; tP+=p; tN+=n; tPA+=pa; tPV+=pv;
+    const pm2pEl    = document.getElementById(`lp-pm2p-${pi}-${li}`);
+    const pm2nEl    = document.getElementById(`lp-pm2n-${pi}-${li}`);
+    const pm2permEl = document.getElementById(`lp-pm2perm-${pi}-${li}`);
+    if(pm2pEl)    pm2pEl.textContent    = fmtM2(p,a);
+    if(pm2nEl)    pm2nEl.textContent    = fmtM2(n,a);
+    if(pm2permEl) pm2permEl.textContent = fmtM2(pv,pa);
+    li++;
+  }
+  const tot = document.getElementById(`lp-total-${pi}`);
+  if(tot){
+    const tds = tot.querySelectorAll('td');
+    if(tds[1]) tds[1].textContent = tA>0?tA.toLocaleString('pt-BR')+' m²':'—';
+    if(tds[2]) tds[2].textContent = fmtR(tP);
+    if(tds[3]) tds[3].textContent = fmtM2(tP,tA);
+    if(tds[4]) tds[4].textContent = fmtR(tN);
+    if(tds[5]) tds[5].textContent = fmtM2(tN,tA);
+    if(tds[6]) tds[6].textContent = tPA>0?tPA.toLocaleString('pt-BR')+' m²':'—';
+    // tds[7] = tipo (—)
+    if(tds[8]) tds[8].textContent = fmtR(tPV);
+    if(tds[9]) tds[9].textContent = fmtM2(tPV,tPA);
+  }
+}
+
+async function salvarLotesPrecos(terrenoId, pi){
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const t = terrenos[idx];
+  const lotes_precos = {};
+  (t.lotes||[]).forEach((sql,li)=>{
+    const area      = parseFloat(document.getElementById(`lp-area-${pi}-${li}`)?.value)||0;
+    const ped       = evalLpExpr(document.getElementById(`lp-ped-${pi}-${li}`)?.value);
+    const neg       = parseFloat(document.getElementById(`lp-neg-${pi}-${li}`)?.value)||0;
+    const perm_area = parseFloat(document.getElementById(`lp-perm-${pi}-${li}`)?.value)||0;
+    const perm_tipo = document.getElementById(`lp-tipo-${pi}-${li}`)?.value||'Residencial';
+    const perm_valor= parseFloat(document.getElementById(`lp-rperm-${pi}-${li}`)?.value)||0;
+    if(area||ped||neg||perm_area||perm_valor)
+      lotes_precos[sql] = {area, pedido:ped, negociado:neg, perm_area, perm_tipo, perm_valor};
+  });
+  terrenos[idx].lotes_precos = lotes_precos;
+  await db.collection('terrenos').doc(terrenoId).update({lotes_precos}).catch(console.warn);
+  renderAtaSection();
+}
+
+function calcFupRow(pi, li){
+  const area  = parseFloat(document.getElementById(`fup-area-${pi}-${li}`)?.value)||0;
+  const ped   = parseFloat(document.getElementById(`fup-ped-${pi}-${li}`)?.value)||0;
+  const neg   = parseFloat(document.getElementById(`fup-neg-${pi}-${li}`)?.value)||0;
+  const fmt   = v => v>0 ? 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}) : '—';
+  const fmtM2 = (v,a) => (v>0&&a>0) ? 'R$ '+Math.round(v/a).toLocaleString('pt-BR') : '—';
+  const pm2pEl = document.getElementById(`fup-pm2p-${pi}-${li}`);
+  const pm2nEl = document.getElementById(`fup-pm2n-${pi}-${li}`);
+  if(pm2pEl) pm2pEl.textContent = fmtM2(ped,area);
+  if(pm2nEl) pm2nEl.textContent = fmtM2(neg,area);
+  // Update totals row
+  let totArea=0, totPed=0, totNeg=0, hasAny=false;
+  const allLotes = document.querySelectorAll(`[id^="fup-area-${pi}-"]`);
+  allLotes.forEach((el,idx)=>{
+    const a = parseFloat(el.value)||0;
+    const p = parseFloat(document.getElementById(`fup-ped-${pi}-${idx}`)?.value)||0;
+    const n = parseFloat(document.getElementById(`fup-neg-${pi}-${idx}`)?.value)||0;
+    totArea+=a; totPed+=p; totNeg+=n;
+    if(a||p||n) hasAny=true;
+  });
+  const setTot = (id,val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  setTot(`fup-tot-area-${pi}`, totArea>0 ? totArea.toLocaleString('pt-BR',{maximumFractionDigits:2})+' m²' : '—');
+  setTot(`fup-tot-ped-${pi}`,  fmt(totPed));
+  setTot(`fup-tot-pm2p-${pi}`, fmtM2(totPed,totArea));
+  setTot(`fup-tot-neg-${pi}`,  fmt(totNeg));
+  setTot(`fup-tot-pm2n-${pi}`, fmtM2(totNeg,totArea));
+}
 
 async function salvarFup(terrenoId, panelIdx){
   const dateEl = document.getElementById('fup-date-'+panelIdx);
@@ -3847,10 +4772,11 @@ async function addDashAta(terrenoId, panelIdx){
   const texto  = inp?.value.trim();
   const data   = date?.value;
   const status = selSt?.value || '';
-  if(!texto || !data){ alert('Preencha a data e o texto da ata.'); return; }
+  if(!texto) return;
+  const _data = data || new Date().toISOString().slice(0,10);
   const idx = terrenos.findIndex(t=>t.id===terrenoId);
   if(idx<0) return;
-  const nova = {data, texto, ...(status ? {status} : {})};
+  const nova = {data:_data, texto, ...(status ? {status} : {})};
   const ata = Array.isArray(terrenos[idx].ata) ? [...terrenos[idx].ata, nova] : [nova];
   terrenos[idx].ata = ata;
   // Atualiza também o status do terreno se selecionado
@@ -3864,7 +4790,7 @@ async function addDashAta(terrenoId, panelIdx){
     const el = document.createElement('div');
     el.className = 'dash-ata-entry';
     el.innerHTML = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-      <div class="dash-ata-entry-date">${formatAtaDate(data)}</div>
+      <div class="dash-ata-entry-date">${formatAtaDate(_data)}</div>
       ${sl?`<span style="font-size:10px;padding:1px 7px;border-radius:10px;font-weight:700;background:${sc}22;color:${sc};border:1px solid ${sc}44;">${sl}</span>`:''}
     </div>
     <div class="dash-ata-entry-text">${escHtml(texto)}</div>`;
@@ -3975,7 +4901,7 @@ async function processTextInput(){
     if(parsed.area)       document.getElementById('f-area').value=parsed.area;
     if(parsed.corretor)   document.getElementById('f-corretor').value=parsed.corretor;
     if(parsed.zoneamento) document.getElementById('f-zone').value=parsed.zoneamento;
-    if(parsed.obs)        document.getElementById('f-obs').value=parsed.obs;
+    const _fobs=document.getElementById('f-obs'); if(_fobs&&parsed.obs) _fobs.value=parsed.obs;
     closeDropZone();
   }catch(e){ alert('Erro ao analisar: '+e.message); }
   finally{ btn.textContent='Analisar e preencher formulário'; btn.disabled=false; }
@@ -4210,7 +5136,1356 @@ try {
 } catch(e) {
   console.error('Firebase init error:',e);
 }
+
+// ── ABAS POR LOTE ─────────────────────────────────────────────────────────────
+function switchLoteTab(pi, tabId){
+  // Switch tab buttons
+  const bar = document.getElementById(`ltb-${pi}`);
+  if(bar) bar.querySelectorAll('.lote-tab').forEach(btn=>btn.classList.remove('active'));
+  // Activate clicked tab button
+  if(tabId==='geral'){
+    bar?.querySelector('.lote-tab:first-child')?.classList.add('active');
+  } else {
+    const tabs = bar?.querySelectorAll('.lote-tab');
+    if(tabs) tabs[parseInt(tabId)+1]?.classList.add('active');
+  }
+  // Switch panes — hide all in this panel then show target
+  const panel = document.getElementById(`ap${pi}`);
+  if(!panel) return;
+  panel.querySelectorAll('.lote-tab-pane').forEach(p=>p.classList.remove('active'));
+  const target = tabId==='geral'
+    ? document.getElementById(`lt-geral-${pi}`)
+    : document.getElementById(`lt-${pi}-${tabId}`);
+  if(target) target.classList.add('active');
+}
+
+async function addLoteProposta(terrenoId, pi, li, sql){
+  const inp  = document.getElementById(`lp-inp-${pi}-${li}`);
+  const date = document.getElementById(`lp-date-${pi}-${li}`);
+  const texto = inp?.value.trim();
+  if(!texto) return;
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const nova = {data: date?.value||new Date().toISOString().slice(0,10), texto};
+  const lotes_propostas = JSON.parse(JSON.stringify(terrenos[idx].lotes_propostas||{}));
+  if(!lotes_propostas[sql]) lotes_propostas[sql]=[];
+  lotes_propostas[sql].push(nova);
+  terrenos[idx].lotes_propostas = lotes_propostas;
+  inp.value='';
+  // Update list
+  const list = document.getElementById(`lp-list-${pi}-${li}`);
+  if(list){
+    const el=document.createElement('div');
+    el.style.cssText='padding:6px 0;border-bottom:1px solid #f3f4f6;font-size:12px;';
+    el.innerHTML=`<span style="font-size:10px;font-weight:700;color:var(--accent);font-family:var(--mono);margin-right:6px;">${nova.data}</span><span style="white-space:pre-wrap;">${escHtml(nova.texto)}</span>`;
+    list.querySelector('[style*="Nenhuma"]')?.remove();
+    list.prepend(el);
+  }
+  await db.collection('terrenos').doc(terrenoId).update({lotes_propostas}).catch(console.warn);
+}
+
+async function addLoteDoc(terrenoId, pi, li, sql){
+  const nome = document.getElementById(`ld-nome-${pi}-${li}`)?.value.trim();
+  const link = document.getElementById(`ld-link-${pi}-${li}`)?.value.trim();
+  if(!nome && !link) return;
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const lotes_docs = JSON.parse(JSON.stringify(terrenos[idx].lotes_docs||{}));
+  if(!lotes_docs[sql]) lotes_docs[sql]=[];
+  lotes_docs[sql].push({nome:nome||link, link});
+  terrenos[idx].lotes_docs = lotes_docs;
+  document.getElementById(`ld-nome-${pi}-${li}`).value='';
+  document.getElementById(`ld-link-${pi}-${li}`).value='';
+  // Update list
+  const list = document.getElementById(`ld-list-${pi}-${li}`);
+  if(list){
+    const el=document.createElement('div');
+    el.style.cssText='display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:12px;';
+    el.innerHTML=link
+      ?`<a href="${escHtml(link)}" target="_blank" style="color:#7c3aed;font-weight:600;flex:1;">📄 ${escHtml(nome||link)}</a>`
+      :`<span style="flex:1;">📄 ${escHtml(nome)}</span>`;
+    list.querySelector('[style*="Nenhum"]')?.remove();
+    list.prepend(el);
+  }
+  await db.collection('terrenos').doc(terrenoId).update({lotes_docs}).catch(console.warn);
+}
+
+async function deleteLoteDoc(terrenoId, pi, li, sql, di){
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx<0) return;
+  const lotes_docs = JSON.parse(JSON.stringify(terrenos[idx].lotes_docs||{}));
+  if(lotes_docs[sql]) lotes_docs[sql].splice(di,1);
+  terrenos[idx].lotes_docs = lotes_docs;
+  await db.collection('terrenos').doc(terrenoId).update({lotes_docs}).catch(console.warn);
+  renderAtaSection();
+}
+
+// ── LOTE PDF IMPORT / EXPORT ──────────────────────────────────────────────────
+
+const _DOC_LABELS = { matricula: '📋 Matrícula', iptu: '🏛 IPTU' };
+
+function _buildDocRowHtml(terrenoId, sql, pi, li, docType, label, meta){
+  const hasFile = meta && !!localStorage.getItem(`pdf_${terrenoId}_${sql}_${docType}`);
+  const metaOk = meta && hasFile;
+  return `
+    <div style="display:flex;align-items:center;gap:6px;padding:7px 0;flex-wrap:wrap;">
+      <span style="font-size:11px;font-weight:700;color:var(--text);min-width:74px;">${label}</span>
+      ${metaOk
+        ? `<span style="flex:1;font-size:11px;color:#7c3aed;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;" title="${escHtml(meta.nome||'')}">📄 ${escHtml(meta.nome||'')}</span>
+           <button onclick="abrirLotePdf('${terrenoId}','${sql}','${docType}')" style="padding:3px 9px;border-radius:5px;border:1px solid #7c3aed55;background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;">👁 Abrir</button>
+           <button onclick="exportLotePdf('${terrenoId}','${sql}','${docType}')" style="padding:3px 9px;border-radius:5px;border:1px solid #7c3aed55;background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;">📤 Baixar</button>
+           <button onclick="clearLotePdf('${terrenoId}','${sql}',${pi},${li},'${docType}')" style="padding:3px 6px;border-radius:5px;border:1px solid #f8717144;background:#fff5f5;color:#ef4444;font-size:10px;cursor:pointer;" title="Remover">✕</button>`
+        : `<span style="flex:1;font-size:11px;color:var(--muted);font-family:var(--mono);">Solte o PDF aqui ou use o botão</span>`}
+      <label style="padding:3px 9px;border-radius:5px;border:1px solid #7c3aed55;background:#ede9fe;color:#7c3aed;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;">
+        📥 Importar PDF
+        <input type="file" accept=".pdf" style="display:none;" onchange="importLotePdf('${terrenoId}','${sql}',${pi},${li},'${docType}',this)">
+      </label>
+    </div>`;
+}
+
+function _refreshDocRow(terrenoId, sql, pi, li, docType){
+  const el = document.getElementById(`doc-row-${pi}-${li}-${docType}`);
+  if(!el) return;
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  const meta = (terrenos[idx]?.lotes_pdfs?.[sql]||{})[docType]||null;
+  el.innerHTML = _buildDocRowHtml(terrenoId, sql, pi, li, docType, _DOC_LABELS[docType]||docType, meta);
+}
+
+async function _processPdfFile(file, terrenoId, sql, pi, li, docType){
+  if(file.type !== 'application/pdf'){ alert('Por favor selecione um arquivo PDF.'); return; }
+  if(file.size > 3*1024*1024){ alert('PDF muito grande (máx 3MB). Reduza o tamanho ou use um link em "Outros documentos".'); return; }
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64 = e.target.result;
+    const key = `pdf_${terrenoId}_${sql}_${docType}`;
+    try { localStorage.setItem(key, base64); }
+    catch(err){ alert('Espaço local insuficiente. Tente um arquivo menor.'); return; }
+    const idx = terrenos.findIndex(t=>t.id===terrenoId);
+    if(idx>=0){
+      const lotes_pdfs = JSON.parse(JSON.stringify(terrenos[idx].lotes_pdfs||{}));
+      if(!lotes_pdfs[sql]) lotes_pdfs[sql]={};
+      lotes_pdfs[sql][docType] = {nome: file.name, size: file.size, uploadedAt: new Date().toISOString().slice(0,10)};
+      terrenos[idx].lotes_pdfs = lotes_pdfs;
+      await db.collection('terrenos').doc(terrenoId).update({lotes_pdfs}).catch(console.warn);
+    }
+    _refreshDocRow(terrenoId, sql, pi, li, docType);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function importLotePdf(terrenoId, sql, pi, li, docType, inputEl){
+  const file = inputEl.files[0];
+  if(!file) return;
+  await _processPdfFile(file, terrenoId, sql, pi, li, docType);
+  inputEl.value='';
+}
+
+function onDocRowDrop(event, terrenoId, sql, pi, li, docType){
+  event.preventDefault();
+  const file = event.dataTransfer?.files?.[0];
+  if(!file) return;
+  _processPdfFile(file, terrenoId, sql, pi, li, docType);
+}
+
+function abrirLotePdf(terrenoId, sql, docType){
+  const key = `pdf_${terrenoId}_${sql}_${docType}`;
+  const base64 = localStorage.getItem(key);
+  if(!base64){ alert('PDF não encontrado no armazenamento local.\nO arquivo pode ter sido importado em outro computador ou navegador.'); return; }
+  // Convert base64 to blob URL and open in new tab
+  const byteStr = atob(base64.split(',')[1]||base64);
+  const bytes = new Uint8Array(byteStr.length);
+  for(let i=0;i<byteStr.length;i++) bytes[i]=byteStr.charCodeAt(i);
+  const blob = new Blob([bytes], {type:'application/pdf'});
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+  setTimeout(()=>URL.revokeObjectURL(url), 30000);
+}
+
+function exportLotePdf(terrenoId, sql, docType){
+  const key = `pdf_${terrenoId}_${sql}_${docType}`;
+  const base64 = localStorage.getItem(key);
+  if(!base64){ alert('PDF não encontrado no armazenamento local.\nO arquivo pode ter sido importado em outro computador ou navegador.'); return; }
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  const meta = terrenos[idx]?.lotes_pdfs?.[sql]?.[docType]||{};
+  const a = document.createElement('a');
+  a.href = base64;
+  a.download = meta.nome||`${docType}.pdf`;
+  a.click();
+}
+
+async function clearLotePdf(terrenoId, sql, pi, li, docType){
+  if(!confirm('Remover este PDF?')) return;
+  localStorage.removeItem(`pdf_${terrenoId}_${sql}_${docType}`);
+  const idx = terrenos.findIndex(t=>t.id===terrenoId);
+  if(idx>=0){
+    const lotes_pdfs = JSON.parse(JSON.stringify(terrenos[idx].lotes_pdfs||{}));
+    if(lotes_pdfs[sql]) delete lotes_pdfs[sql][docType];
+    terrenos[idx].lotes_pdfs = lotes_pdfs;
+    await db.collection('terrenos').doc(terrenoId).update({lotes_pdfs}).catch(console.warn);
+  }
+  _refreshDocRow(terrenoId, sql, pi, li, docType);
+}
+
+// ── MODAL DRAG ────────────────────────────────────────────────────────────────
+let _dragActive=false, _dragSX=0, _dragSY=0, _dragL=0, _dragT=0;
+
+function initModalDrag(){
+  const hdr = document.querySelector('.modal-header');
+  if(!hdr || hdr._dragInit) return;
+  hdr._dragInit = true;
+  hdr.addEventListener('mousedown', e=>{
+    if(e.target.closest('.btn-close')) return;
+    const modal = document.querySelector('.modal');
+    const r = modal.getBoundingClientRect();
+    modal.style.transform='none';
+    modal.style.top  = r.top+'px';
+    modal.style.left = r.left+'px';
+    _dragSX=e.clientX; _dragSY=e.clientY;
+    _dragL=r.left;     _dragT=r.top;
+    _dragActive=true;
+    e.preventDefault();
+  });
+}
+
+document.addEventListener('mousemove', e=>{
+  if(!_dragActive) return;
+  const modal = document.querySelector('.modal');
+  if(!modal) return;
+  const nx = Math.max(0, Math.min(_dragL + e.clientX - _dragSX, window.innerWidth  - modal.offsetWidth));
+  const ny = Math.max(0, Math.min(_dragT + e.clientY - _dragSY, window.innerHeight - modal.offsetHeight));
+  modal.style.left=nx+'px';
+  modal.style.top =ny+'px';
+});
+document.addEventListener('mouseup', ()=>{ _dragActive=false; });
+
+// ── PROPOSTA DE AQUISIÇÃO ─────────────────────────────────────────────────────
+
+let _pmTerrenoId = null, _pmPi = null, _pmLi = null, _pmModelo = null;
+
+const PM_MODELO_LABELS = {
+  dinheiro: '100% Dinheiro',
+  permuta:  '100% Permuta',
+  misto:    'Dinheiro + Permuta',
+};
+
+// Shared input style
+const _si = 'width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;';
+const _li = 'font-size:11px;color:var(--muted);';
+
+// Correction block (shared by dinheiro and misto)
+const _PM_CORR = `
+    <div style="grid-column:span 2;border-top:1px solid #f3f4f6;padding-top:12px;margin-top:4px;">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">Correção monetária</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+        <label style="font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="radio" name="pm-corr-yn" value="nao" checked onchange="pmOnCorrToggle()"> Sem correção
+        </label>
+        <label style="font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="radio" name="pm-corr-yn" value="sim" onchange="pmOnCorrToggle()"> Com correção
+        </label>
+      </div>
+      <div id="pm-corr-fields" style="display:none;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>
+          <label style="${_li}">Índice de correção</label>
+          <select id="pm-corr-indice" onchange="pmOnCorrIndiceChange()" style="${_si}">
+            <option value="INCC">INCC</option>
+            <option value="IPCA">IPCA</option>
+            <option value="outro">Outro (especificar)</option>
+          </select>
+        </div>
+        <div id="pm-corr-outro-wrap" style="display:none;">
+          <label style="${_li}">Especifique o índice</label>
+          <input id="pm-corr-outro" type="text" placeholder="ex: IGP-M" style="${_si}">
+        </div>
+        <div style="grid-column:span 2;">
+          <label style="${_li}">Data base</label>
+          <select id="pm-corr-data-base" onchange="pmOnCorrDataBaseChange()" style="${_si}">
+            <option value="Data da assinatura da Proposta">Data da assinatura da Proposta</option>
+            <option value="Data da assinatura do Compromisso de Venda e Compra">Data da assinatura do Compromisso de Venda e Compra</option>
+            <option value="Data da Escritura">Data da Escritura</option>
+            <option value="outro">Outra (especificar)</option>
+          </select>
+        </div>
+        <div id="pm-corr-data-outro-wrap" style="display:none;grid-column:span 2;">
+          <label style="${_li}">Especifique a data base</label>
+          <input id="pm-corr-data-outro" type="text" placeholder="ex: Data do protocolo de aprovação" style="${_si}">
+        </div>
+      </div>
+    </div>`;
+
+const PM_COND_FIELDS = {
+  dinheiro: `
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço total <span style="color:#9ca3af;font-size:10px;">(R$ — ao digitar, calcula as parcelas automaticamente)</span></label>
+      <input id="pm-preco" type="text" placeholder="ex: 7.900.000" oninput="pmAutoCalc()" style="${_si}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço por extenso <span style="color:#9ca3af;font-size:10px;">(preenchido automaticamente)</span></label>
+      <input id="pm-preco-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Nº de parcelas</label>
+      <input id="pm-num-parc" type="number" min="1" placeholder="ex: 12" oninput="pmAutoCalc()" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Nº de parcelas (por extenso)</label>
+      <input id="pm-num-parc-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Valor por parcela (R$) <span style="color:#9ca3af;font-size:10px;">(calculado)</span></label>
+      <input id="pm-val-parc" type="text" placeholder="calculado automaticamente" readonly style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Valor por parcela (por extenso)</label>
+      <input id="pm-val-parc-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    ${_PM_CORR}`,
+
+  permuta: `
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço total (R$)</label>
+      <input id="pm-preco" type="text" placeholder="ex: 8.000.000" oninput="pmAutoCalc()" style="${_si}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço por extenso</label>
+      <input id="pm-preco-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Área permutada (m²)</label>
+      <input id="pm-area-perm" type="text" placeholder="ex: 500" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Área permutada (por extenso)</label>
+      <input id="pm-area-perm-ext" type="text" placeholder="ex: quinhentos" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Tipo da permuta (fins)</label>
+      <input id="pm-tipo-perm" type="text" placeholder="ex: Residencial" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Indenização mensal (R$)</label>
+      <input id="pm-indenizacao" type="text" oninput="pmAutoCalc()" placeholder="ex: 30.000" style="${_si}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Indenização mensal (por extenso)</label>
+      <input id="pm-indenizacao-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>`,
+
+  misto: `
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço total (R$)</label>
+      <input id="pm-preco" type="text" placeholder="ex: 10.000.000" oninput="pmAutoCalc()" style="${_si}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Preço por extenso</label>
+      <input id="pm-preco-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Área permutada (m²)</label>
+      <input id="pm-area-perm" type="text" placeholder="ex: 400" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Área permutada (por extenso)</label>
+      <input id="pm-area-perm-ext" type="text" placeholder="ex: quatrocentos" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Tipo da permuta (fins)</label>
+      <input id="pm-tipo-perm" type="text" placeholder="ex: Residencial" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Indenização mensal (R$)</label>
+      <input id="pm-indenizacao" type="text" oninput="pmAutoCalc()" placeholder="ex: 25.000" style="${_si}">
+    </div>
+    <div style="grid-column:span 2;">
+      <label style="${_li}">Indenização mensal (por extenso)</label>
+      <input id="pm-indenizacao-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Torna em dinheiro (R$)</label>
+      <input id="pm-torna" type="text" oninput="pmAutoCalc()" placeholder="ex: 3.000.000" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Torna (por extenso)</label>
+      <input id="pm-torna-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Nº de parcelas (torna)</label>
+      <input id="pm-num-parc" type="number" min="1" placeholder="ex: 12" oninput="pmAutoCalc()" style="${_si}">
+    </div>
+    <div>
+      <label style="${_li}">Nº de parcelas (por extenso)</label>
+      <input id="pm-num-parc-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Valor por parcela (R$)</label>
+      <input id="pm-val-parc" type="text" placeholder="calculado automaticamente" readonly style="${_si}background:#f9fafb;">
+    </div>
+    <div>
+      <label style="${_li}">Valor por parcela (por extenso)</label>
+      <input id="pm-val-parc-ext" type="text" placeholder="gerado automaticamente" style="${_si}background:#f9fafb;">
+    </div>
+    ${_PM_CORR}`,
+};
+
+let _pmSql = null;
+let _pmMatriculaUrl = null;
+
+function openPropostaModal(terrenoId, pi, sql){
+  _pmTerrenoId = terrenoId;
+  _pmPi = pi;
+  _pmSql = sql||null;
+  _pmModelo = null;
+  const _t0 = terrenos.find(x=>x.id===terrenoId)||{};
+  _pmLi = sql ? (_t0.lotes||[]).indexOf(sql) : -1;
+  const t = terrenos.find(x=>x.id===terrenoId)||{};
+
+  // Pre-fill from terreno
+  document.getElementById('pm-subtitle').textContent = (sql ? `SQL: ${sql} — ` : '') + (t.endereco||'');
+  document.getElementById('pm-endereco').value = t.endereco||'';
+  // Area: use lote-specific area from lotes_areas dict, formatted with pt-BR separators
+  const rawArea = sql ? ((t.lotes_areas||{})[sql]||null) : null;
+  const fallbackArea = t.area_total||t.area||'';
+  document.getElementById('pm-area').value = rawArea != null
+    ? Number(rawArea).toLocaleString('pt-BR', {maximumFractionDigits:2})
+    : fallbackArea;
+  document.getElementById('pm-lote').value = sql||((t.lotes||[]).join(' / '))||'';
+  document.getElementById('pm-quadra').value = t.quadra||'';
+  document.getElementById('pm-setor').value = t.setor||'';
+  document.getElementById('pm-matricula-num').value = '';
+  document.getElementById('pm-cartorio').value = '';
+  document.getElementById('pm-proprietario').value = t.proprietario||t.contato||'';
+  document.getElementById('pm-proprietario-ass').value = t.proprietario||t.contato||'';
+  document.getElementById('pm-cuidados').value = '';
+  document.getElementById('pm-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('pm-cond-fields').innerHTML = '<div style="grid-column:span 2;color:var(--muted);font-size:11px;font-family:var(--mono);">Selecione o modelo acima para ver os campos.</div>';
+
+  // Reset modelo buttons
+  ['dinheiro','permuta','misto'].forEach(k=>{
+    const btn = document.getElementById(`pm-btn-${k}`);
+    if(btn){ btn.style.border='2px solid #e5e7eb'; btn.style.background='#f9fafb'; btn.style.color='#374151'; }
+  });
+
+  // Check for matrícula PDF
+  const matBtn = document.getElementById('pm-show-mat-btn');
+  const matPanel = document.getElementById('pm-matricula-panel');
+  const matIframe = document.getElementById('pm-matricula-iframe');
+  if(_pmMatriculaUrl){ URL.revokeObjectURL(_pmMatriculaUrl); _pmMatriculaUrl=null; }
+  matPanel.style.display='none';
+  matIframe.src='';
+
+  const extractBtn = document.getElementById('pm-extract-btn');
+  if(sql){
+    const matKey = `pdf_${terrenoId}_${sql}_matricula`;
+    const matB64 = localStorage.getItem(matKey);
+    if(matB64){
+      if(matBtn) matBtn.style.display='';
+      if(extractBtn) extractBtn.style.display='';
+      const nlmBtn = document.getElementById('pm-nlm-btn');
+      if(nlmBtn) nlmBtn.style.display='';
+      // Pre-create blob URL
+      const byteStr = atob(matB64.split(',')[1]||matB64);
+      const bytes = new Uint8Array(byteStr.length);
+      for(let j=0;j<byteStr.length;j++) bytes[j]=byteStr.charCodeAt(j);
+      _pmMatriculaUrl = URL.createObjectURL(new Blob([bytes],{type:'application/pdf'}));
+      // Auto-extract matrícula/cartório/proprietário on modal open
+      setTimeout(()=>pmExtrairMatricula(true), 400);
+    } else {
+      if(matBtn) matBtn.style.display='none';
+      if(extractBtn) extractBtn.style.display='none';
+    }
+  } else {
+    if(matBtn) matBtn.style.display='none';
+    if(extractBtn) extractBtn.style.display='none';
+  }
+
+  // Restore saved draft (overrides defaults but not lote-specific area)
+  const _draftKey = `proposta_draft_${terrenoId}_${sql||'geral'}`;
+  const _draft = JSON.parse(localStorage.getItem(_draftKey)||'null');
+  if(_draft){
+    const _staticFields = ['pm-endereco','pm-lote','pm-quadra','pm-setor','pm-matricula-num','pm-cartorio','pm-proprietario','pm-proprietario2','pm-cuidados','pm-proprietario-ass','pm-data'];
+    _staticFields.forEach(id=>{ if(_draft[id]!=null){ const el=document.getElementById(id); if(el) el.value=_draft[id]; } });
+    // Restore lote area only if no lotes_areas entry exists
+    if(_draft['pm-area'] && rawArea==null && !document.getElementById('pm-area')?.value) _setVal('pm-area',_draft['pm-area']);
+    // Restore modelo + condition fields
+    if(_draft._modelo){
+      setPmModelo(_draft._modelo); // renders condition fields immediately
+      // Wait one tick for DOM to update then fill values
+      setTimeout(()=>{
+        const _condFields=['pm-preco','pm-preco-ext','pm-num-parc','pm-num-parc-ext','pm-val-parc','pm-val-parc-ext','pm-area-perm','pm-area-perm-ext','pm-tipo-perm','pm-indenizacao','pm-indenizacao-ext','pm-torna','pm-torna-ext'];
+        _condFields.forEach(id=>{ if(_draft[id]!=null){ const el=document.getElementById(id); if(el) el.value=_draft[id]; } });
+        if(_draft._corr_yn==='sim'){
+          const r=document.querySelector('input[name="pm-corr-yn"][value="sim"]');
+          if(r){ r.checked=true; pmOnCorrToggle(); }
+          if(_draft._corr_indice){ const si=document.getElementById('pm-corr-indice'); if(si){si.value=_draft._corr_indice;} pmOnCorrIndiceChange(); }
+          if(_draft._corr_outro) _setVal('pm-corr-outro',_draft._corr_outro);
+          if(_draft._corr_data){ const sd=document.getElementById('pm-corr-data-base'); if(sd){sd.value=_draft._corr_data;} pmOnCorrDataBaseChange(); }
+          if(_draft._corr_data_outro) _setVal('pm-corr-data-outro',_draft._corr_data_outro);
+        }
+      },30);
+    }
+  }
+
+  document.getElementById('proposta-overlay').style.display='block';
+}
+
+function _buildDraftCard(terrenoId, sql, pi, li){
+  const key = `proposta_draft_${terrenoId}_${sql||'geral'}`;
+  const d = JSON.parse(localStorage.getItem(key)||'null');
+  if(!d||!d._modelo) return '';
+  const PM_LBL = {dinheiro:'Dinheiro',permuta:'Permuta',misto:'Permuta + Torna'};
+  const modelo = PM_LBL[d._modelo]||d._modelo;
+  const preco = d['pm-preco'] ? `R$ ${d['pm-preco']}` : '';
+  const parc = d['pm-num-parc']
+    ? (d['pm-val-parc'] ? `${d['pm-num-parc']}x R$ ${d['pm-val-parc']}` : `${d['pm-num-parc']} parcelas`)
+    : '';
+  const torna = d['pm-torna'] ? `torna R$ ${d['pm-torna']}` : '';
+  const summary = [modelo, preco, parc, torna].filter(Boolean).join(' · ');
+  const escSql = (sql||'').replace(/'/g,"\\'");
+  return `<div style="background:#f5f3ff;border:1px solid #c4b5fd;border-radius:7px;padding:8px 10px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;">📋 Rascunho salvo</div>
+      <div style="font-size:11px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${summary}">${summary}</div>
+    </div>
+    <button onclick="openPropostaModal('${terrenoId}',${pi},'${escSql}')"
+      style="padding:4px 10px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:10px;font-weight:600;cursor:pointer;white-space:nowrap;">✏️ Continuar</button>
+  </div>`;
+}
+
+function salvarDadosProposta(){
+  const key = `proposta_draft_${_pmTerrenoId}_${_pmSql||'geral'}`;
+  const allIds=['pm-endereco','pm-area','pm-lote','pm-quadra','pm-setor','pm-matricula-num','pm-cartorio','pm-proprietario','pm-proprietario2','pm-cuidados','pm-proprietario-ass','pm-data','pm-preco','pm-preco-ext','pm-num-parc','pm-num-parc-ext','pm-val-parc','pm-val-parc-ext','pm-area-perm','pm-area-perm-ext','pm-tipo-perm','pm-indenizacao','pm-indenizacao-ext','pm-torna','pm-torna-ext','pm-corr-indice','pm-corr-outro','pm-corr-data-base','pm-corr-data-outro'];
+  const draft = {_modelo:_pmModelo||null};
+  allIds.forEach(id=>{ const el=document.getElementById(id); if(el) draft[id]=el.value; });
+  const corrYN=document.querySelector('input[name="pm-corr-yn"]:checked')?.value;
+  draft._corr_yn=corrYN||'nao';
+  draft._corr_indice=document.getElementById('pm-corr-indice')?.value||'';
+  draft._corr_outro=_pmVal('pm-corr-outro');
+  draft._corr_data=document.getElementById('pm-corr-data-base')?.value||'';
+  draft._corr_data_outro=_pmVal('pm-corr-data-outro');
+  try{ localStorage.setItem(key, JSON.stringify(draft)); }catch(e){ console.warn('localStorage cheio'); }
+  // Refresh draft card in lote panel (live, without closing modal)
+  if(_pmLi >= 0){
+    const el = document.getElementById(`lp-draft-${_pmPi}-${_pmLi}`);
+    if(el) el.innerHTML = _buildDraftCard(_pmTerrenoId, _pmSql, _pmPi, _pmLi);
+  }
+  const btn=document.getElementById('pm-btn-salvar');
+  if(btn){ btn.textContent='✅ Salvo!'; setTimeout(()=>btn.textContent='💾 Salvar dados',1800); }
+}
+
+// ── OCR helper: render PDF page to canvas, run Tesseract ─────────────────────
+async function _loadTesseract(){
+  if(window.Tesseract) return;
+  await new Promise((res,rej)=>{
+    const s=document.createElement('script');
+    s.src='https://unpkg.com/tesseract.js@5/dist/tesseract.min.js';
+    s.onload=res; s.onerror=rej;
+    document.head.appendChild(s);
+  });
+}
+
+async function _ocrPdfPage(pdf, pageNum){
+  await _loadTesseract();
+  const page=await pdf.getPage(pageNum);
+  const vp=page.getViewport({scale:2.5}); // high res for OCR
+  const canvas=document.createElement('canvas');
+  canvas.width=vp.width; canvas.height=vp.height;
+  await page.render({canvasContext:canvas.getContext('2d'), viewport:vp}).promise;
+  const worker=await Tesseract.createWorker('por');
+  const {data:{text}}=await worker.recognize(canvas);
+  await worker.terminate();
+  return text;
+}
+
+// ── Shared parse helper ───────────────────────────────────────────────────────
+function _parseMat(txt){
+  const found={};
+  // Normalize: collapse multiple spaces/newlines to single space for easier matching
+  const t = txt.replace(/[\r\n]+/g,' ').replace(/\s{2,}/g,' ');
+
+  // ── Nº Matrícula ─────────────────────────────────────────────────────────
+  // ONR digital: "matrícula 10.683" or "matricula 10.683"
+  // Classic: "Matrícula nº 12.345" / "R-1/10.683"
+  const matM = t.match(/matr[íi]cula\s*[:\-]?\s*n?[º°oa.]?\s*([\d]{2,6}[\.,][\d]{3})/i)
+    || t.match(/matr[íi]cula\s*[:\-]?\s*([\d]{4,6})\b/i)
+    || t.match(/\bmatr[íi]cula\b.{0,15}?([\d]{2,6}\.[\d]{3})\b/i)
+    || t.match(/R-\d+\/([\d]{2,6}\.[\d]{3})/i);
+  if(matM){ found.mat = matM[1].replace(/\.$/,'').trim(); }
+
+  // ── Cartório ──────────────────────────────────────────────────────────────
+  // ONR: "1.º OFICIAL DE REGISTRO DE IMÓVEIS" or "1.o OFICIAL..."
+  // Classic: "3º Ofício de Registro de Imóveis de São Paulo"
+  const cartM = t.match(/\d+[.°º]?[oaº°]?\s*OFICIAL\s+DE\s+REGISTRO\s+DE\s+IM[OÓ]VEIS[^,]{0,60}/i)
+    || t.match(/\d+[°º.]\s*of[íi]cio\s+de\s+registro[^,]{0,60}/i)
+    || t.match(/\d+[°º.]\s*cart[óo]rio\s+de\s+registro[^,]{0,60}/i)
+    || t.match(/\d+[°º.]\s*registro\s+de\s+im[oó]veis[^,]{0,50}/i)
+    || t.match(/OFICIAL\s+DE\s+REGISTRO\s+DE\s+IM[OÓ]VEIS[^,]{0,60}/i);
+  if(cartM){ found.cartorio = cartM[0].replace(/\s+/g,' ').trim(); }
+
+  // ── Proprietário ATUAL ───────────────────────────────────────────────────
+  // Works for both ALL-CAPS (cartório typewritten) and Title Case (Tesseract OCR output)
+  const _SKIP = new Set(['DE','DA','DO','DAS','DOS','E','EM','NA','NO','POR','COM','PARA',
+    'RG','CPF','CNPJ','SSP','SP','RJ','MG','RS','CE','BA','GO','PR','SC','PE','PA','AM',
+    'SAO','BRASIL','CAPITAL','LIVRO','FICHA','DATA','VALOR','ATO','REF','OFICIAL','OFICIO',
+    'CARTORIO','REGISTRO','COMARCA','TABELIAO','ESCREVENTE','SERVICO','CNS','ONR','CRI',
+    'MICROFILM','FOLHA','PAGINA','FOI','PELO','PELA','DOS','DAS','NOS','NAS','FORAM',
+    'FEITO','LAVRADA','ASSINADA','CONFORME','ESCRITURA','PUBLICA','INVENTARIO','BRASIL',
+    'BRASILEIROS','BRASILEIRAS','BRASILEIRO','BRASILEIRA','RUA','AV','AVE','AVENIDA']);
+
+  // Words that indicate place names, not person names
+  const _PLACE_WORDS = new Set(['JARDIM','VILA','RUA','AVENIDA','ALAMEDA','TRAVESSA','ESTRADA','RODOVIA','BAIRRO','CONDOMINIO','CONDOMÍNIO','SITIO','SÍTIO','FAZENDA','CHACARA','CHÁCARA','LOTE','QUADRA','SETOR','BLOCO','CONJUNTO']);
+
+  function _extractNameSequences(block){
+    // Match 2–6 consecutive capitalized words (ALL-CAPS or Title Case), each ≥ 2 chars
+    const re = /\b([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇa-záàâãéêíóôõúç]{1,}(?:\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇa-záàâãéêíóôõúç]{1,}){1,5})\b/g;
+    const names = [];
+    let m;
+    while((m=re.exec(block))!==null){
+      const words = m[1].split(/\s+/);
+      // Reject if any word is a place word
+      if(words.some(w => _PLACE_WORDS.has(w.toUpperCase()))) continue;
+      // Need ≥ 2 "real" words (not stop words, not digits, ≥ 3 chars)
+      const valid = words.filter(w => w.length>=3 && !/\d/.test(w) && !_SKIP.has(w.toUpperCase()));
+      if(valid.length >= 2){
+        names.push(m[1].trim());
+      }
+    }
+    return [...new Set(names)].filter(n => n.length >= 7);
+  }
+
+  // Strategy: find the PARTILHA/INVENTÁRIO block, then within it find names
+  // AFTER the sub-trigger that marks the heirs (not the deceased)
+  const _BLOCK_TRIGGERS = /(?:PARTILHA|INVENT[AÁ]RIO|HERAN[CÇ]A|SUCESS[AÃ]O|ADJUDICA)[^:]{0,60}:/gi;
+  const _blockMatches = [...t.matchAll(_BLOCK_TRIGGERS)];
+  if(_blockMatches.length){
+    const lastTrigger = _blockMatches[_blockMatches.length-1];
+    const blockStart = lastTrigger.index + lastTrigger[0].length;
+    const fullBlock = t.substring(blockStart, blockStart+1500);
+
+    // Within the block, find where the heirs are named:
+    // Look for sub-triggers like "FOI PARTILHADO", "herdeiros", "em favor de",
+    // "cada um", "sendo herdeiros", "na proporção"
+    const _HEIR_TRIGGERS = /(?:foi\s+partilhad|herdeiro[s]?|em\s+favor\s+de|cada\s+um\s+dos|na\s+propor[cç][aã]o\s+de|ficando\s+a\s+cargo)/gi;
+    const _heirMatches = [...fullBlock.matchAll(_HEIR_TRIGGERS)];
+
+    let searchBlock = fullBlock;
+    if(_heirMatches.length){
+      // Start extracting names from AFTER the heir sub-trigger
+      const firstHeir = _heirMatches[0];
+      searchBlock = fullBlock.substring(firstHeir.index + firstHeir[0].length);
+    }
+
+    console.log('[Heir block]', searchBlock.substring(0,400));
+    const names = _extractNameSequences(searchBlock);
+    console.log('[Names found]', names);
+    if(names.length) found.prop = names.slice(0,2).join(' e ');
+  }
+
+  if(!found.prop){
+    // Fallback: scan entire text for "NOME, RG" or "NOME, CPF" pattern
+    const re = /([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇa-záàâãéêíóôõúç]{1,}(?:\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇa-záàâãéêíóôõúç]{1,}){1,4})\s*,\s*(?:RG|CPF|inscrit|qualific|brasilei)/gi;
+    const ms=[...t.matchAll(re)].map(m=>m[1].trim()).filter(n=>n.length>7);
+    if(ms.length) found.prop=[...new Set(ms)].slice(0,2).join(' e ');
+  }
+
+  if(!found.prop){
+    const pm=t.match(/PROPRIET[ÁA]RIO[S]?\s*:?\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇa-záàâãéêíóôõúç\s]{4,80})(?=[,;]|CPF|CNPJ|portador|brasilei)/i);
+    if(pm) found.prop=pm[1].replace(/\s+/g,' ').trim();
+  }
+
+  return found;
+}
+
+async function pmExtrairMatricula(auto){
+  if(!window.pdfjsLib) return;
+  const b64 = localStorage.getItem(`pdf_${_pmTerrenoId}_${_pmSql}_matricula`);
+  if(!b64) return;
+  const btn = document.getElementById('pm-extract-btn');
+  const setBtn=(t,dis=false)=>{ if(btn){btn.textContent=t;btn.disabled=dis;} };
+  setBtn('⏳ Lendo...', true);
+  try{
+    const byteStr=atob(b64.split(',')[1]||b64);
+    const bytes=new Uint8Array(byteStr.length);
+    for(let i=0;i<byteStr.length;i++) bytes[i]=byteStr.charCodeAt(i);
+    const pdf=await pdfjsLib.getDocument({data:bytes}).promise;
+
+    // 1st attempt: embedded text layer — read ALL pages
+    const pageTexts = [];
+    for(let p=1;p<=pdf.numPages;p++){
+      const pg=await pdf.getPage(p);
+      const ct=await pg.getTextContent();
+      // Join items preserving some spacing; use newline between items for better regex matching
+      pageTexts.push(ct.items.map(it=>it.str).join('\n'));
+    }
+    const txt = pageTexts.join('\n');
+    console.log('[PDF extraído - total chars]', txt.length);
+    console.log('[PDF texto bruto]', txt.substring(0,2000)); // primeiros 2000 chars
+
+    let parsed = _parseMat(txt);
+    console.log('[Parsed]', parsed);
+    // Store raw text for debug feedback
+    window._lastMatriculaTxt = txt;
+
+    // OCR if: text is short OR has no matrícula-related content (e.g. only footer/watermark)
+    const _hasContent = /matr[íi]cula|registro\s+de\s+im[oó]veis|propriet[áa]rio|partilha|r-\d|av-\d/i.test(txt);
+    if(txt.trim().length < 100 || !_hasContent){
+      setBtn('🔍 OCR em andamento…', true);
+      try{
+        // Try last page first (most recent registration), then page 1 for matrícula number
+        const lastPage = pdf.numPages;
+        const ocrLast = await _ocrPdfPage(pdf, lastPage);
+        console.log('[OCR last page raw]', ocrLast);
+        const ocrParsed = _parseMat(ocrLast);
+        if(!parsed.mat && ocrParsed.mat) parsed.mat = ocrParsed.mat;
+        if(!parsed.cartorio && ocrParsed.cartorio) parsed.cartorio = ocrParsed.cartorio;
+        if(!parsed.prop && ocrParsed.prop) parsed.prop = ocrParsed.prop;
+        // If still no matrícula number, try page 1 (header of original registration)
+        if(!parsed.mat && lastPage > 1){
+          const ocrP1 = await _ocrPdfPage(pdf, 1);
+          const p1Parsed = _parseMat(ocrP1);
+          if(p1Parsed.mat) parsed.mat = p1Parsed.mat;
+          if(!parsed.cartorio && p1Parsed.cartorio) parsed.cartorio = p1Parsed.cartorio;
+        }
+      }catch(ocrErr){ console.warn('OCR falhou:', ocrErr); }
+    }
+
+    // Apply extracted values
+    if(parsed.mat)     _setVal('pm-matricula-num', parsed.mat);
+    if(parsed.cartorio) _setVal('pm-cartorio', parsed.cartorio);
+    // Helper: fill proprietário fields from a string like "NOME1 e NOME2"
+    function _fillProprietarios(propStr){
+      const pe  = document.getElementById('pm-proprietario');
+      const pe2 = document.getElementById('pm-proprietario2');
+      const pa  = document.getElementById('pm-proprietario-ass');
+      const parts = propStr.split(/\s+e\s+/i);
+      if(pe)  pe.value  = parts[0]||'';
+      if(pe2) pe2.value = parts[1]||'';
+      if(pa && !pa.value.trim()) pa.value = propStr;
+    }
+
+    if(parsed.prop){
+      const pe = document.getElementById('pm-proprietario');
+      if(pe && !pe.value.trim()) _fillProprietarios(parsed.prop);
+    }
+
+    // Fallback: if proprietário still empty after OCR, check "Aos cuidados de"
+    const _pe = document.getElementById('pm-proprietario');
+    if(_pe && !_pe.value.trim()){
+      const cuidados = (document.getElementById('pm-cuidados')?.value||'').trim();
+      // Only use if it looks like person name(s) — has letters, no @ or /, reasonably long
+      if(cuidados.length > 5 && /[A-Za-z]/.test(cuidados) && !/[@\/]/.test(cuidados)){
+        _fillProprietarios(cuidados);
+        console.log('[pmExtrairMatricula] Proprietário preenchido a partir de "Aos cuidados de":', cuidados);
+      }
+    }
+
+    const nFound=[parsed.mat,parsed.cartorio,parsed.prop].filter(Boolean).length;
+    if(nFound>0){
+      setBtn('✅ '+nFound+' campo(s) extraído(s)');
+      setTimeout(()=>setBtn('🔍 Extrair dados'), 3000);
+    } else {
+      setBtn('⚠️ Não encontrado');
+      setTimeout(()=>setBtn('🔍 Extrair dados'), 3000);
+      if(!auto){
+        console.warn('[pmExtrairMatricula] Não encontrado. Texto extraído:', (window._lastMatriculaTxt||'').substring(0,600));
+      }
+    }
+  }catch(e){
+    console.warn('pmExtrairMatricula:', e);
+    setBtn('🔍 Extrair dados');
+    if(!auto) alert('Erro ao processar: '+e.message);
+  }
+}
+
+function pmOpenNotebookLM(){
+  // 1. Download the matrícula PDF so the user can upload to NotebookLM
+  if(_pmMatriculaUrl){
+    const a = document.createElement('a');
+    a.href = _pmMatriculaUrl;
+    a.download = 'matricula_' + (_pmSql||'lote').replace(/\./g,'_') + '.pdf';
+    a.click();
+  }
+
+  // 2. Open NotebookLM in a new tab
+  window.open('https://notebooklm.google.com', '_blank');
+
+  // 3. Show the response panel
+  const panel = document.getElementById('pm-nlm-panel');
+  if(panel){ panel.style.display = 'flex'; }
+}
+
+function pmAplicarRespostaNLM(){
+  const txt = (document.getElementById('pm-nlm-resposta')?.value||'').trim();
+  if(!txt){ alert('Cole a resposta do NotebookLM antes de aplicar.'); return; }
+
+  // Parse proprietários: look for name patterns in the response
+  // Common NotebookLM answer formats:
+  // "Os proprietários são Gustavo Emil Razuk e Renata Razuk Salomão."
+  // "Proprietários: GUSTAVO EMIL RAZUK e RENATA RAZUK SALOMÃO"
+  // "1. Gustavo Emil Razuk\n2. Renata Razuk Salomão"
+  let prop1='', prop2='';
+
+  // Try: "são [Nome] e [Nome]" or "Proprietários: [Nome] e [Nome]"
+  const reE = /(?:s[aã]o|propriet[áa]rio[s]?\s*[:\-]?)\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-Za-záàâãéêíóôõúç\s]{3,50}?)\s+e\s+([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-Za-záàâãéêíóôõúç\s]{3,50}?)(?=[.,\n]|$)/i;
+  const mE = txt.match(reE);
+  if(mE){ prop1=mE[1].trim(); prop2=mE[2].trim(); }
+
+  // Try: numbered list "1. Nome\n2. Nome"
+  if(!prop1){
+    const rN = /1\.\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-Za-záàâãéêíóôõúç\s]{3,60})(?:\n|$)/i;
+    const m1 = txt.match(rN);
+    if(m1) prop1 = m1[1].trim();
+    const rN2 = /2\.\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-Za-záàâãéêíóôõúç\s]{3,60})(?:\n|$)/i;
+    const m2 = txt.match(rN2);
+    if(m2) prop2 = m2[1].trim();
+  }
+
+  // Try: matrícula number
+  const rMat = /matr[íi]cula\s*[:\-#nNº°.]?\s*([\d]{2,6}[.,][\d]{3}|[\d]{3,7})/i;
+  const mMat = txt.match(rMat);
+  if(mMat) _setVal('pm-matricula-num', mMat[1].replace(',','.'));
+
+  // Try: cartório
+  const rCart = /(\d+[.°º]*[oaOAºª°]?\s*(?:oficial|cartório|registro)[^,.\n]{0,80})/i;
+  const mCart = txt.match(rCart);
+  if(mCart) _setVal('pm-cartorio', mCart[1].trim());
+
+  // Apply proprietários
+  if(prop1){
+    _setVal('pm-proprietario', prop1);
+    _setVal('pm-proprietario2', prop2||'');
+    const fullName = [prop1,prop2].filter(Boolean).join(' e ');
+    const pa = document.getElementById('pm-proprietario-ass');
+    if(pa&&!pa.value.trim()) pa.value = fullName;
+  }
+
+  // Close panel and show feedback
+  const panel = document.getElementById('pm-nlm-panel');
+  if(panel) panel.style.display='none';
+  if(document.getElementById('pm-nlm-resposta')) document.getElementById('pm-nlm-resposta').value='';
+
+  if(prop1||mMat||mCart){
+    alert('✅ Dados aplicados com sucesso!');
+  } else {
+    alert('⚠️ Não consegui identificar os dados. Verifique se colou a resposta completa do NotebookLM.');
+  }
+}
+
+function pmToggleMatricula(){
+  const panel = document.getElementById('pm-matricula-panel');
+  const iframe = document.getElementById('pm-matricula-iframe');
+  if(panel.style.display==='none' || panel.style.display===''){
+    if(!_pmMatriculaUrl) return;
+    iframe.src = _pmMatriculaUrl;
+    panel.style.display='flex';
+    panel.style.flexDirection='column';
+  } else {
+    panel.style.display='none';
+    iframe.src='';
+  }
+}
+
+function closePropostaModal(){
+  document.getElementById('proposta-overlay').style.display='none';
+  const iframe = document.getElementById('pm-matricula-iframe');
+  if(iframe) iframe.src='';
+  if(_pmMatriculaUrl){ URL.revokeObjectURL(_pmMatriculaUrl); _pmMatriculaUrl=null; }
+}
+
+function setPmModelo(modelo){
+  _pmModelo = modelo;
+  ['dinheiro','permuta','misto'].forEach(k=>{
+    const btn = document.getElementById(`pm-btn-${k}`);
+    if(!btn) return;
+    if(k===modelo){
+      btn.style.border='2px solid #7c3aed'; btn.style.background='#ede9fe'; btn.style.color='#7c3aed';
+    } else {
+      btn.style.border='2px solid #e5e7eb'; btn.style.background='#f9fafb'; btn.style.color='#374151';
+    }
+  });
+  document.getElementById('pm-cond-fields').innerHTML = PM_COND_FIELDS[modelo]||'';
+}
+
+function _pmVal(id){ return (document.getElementById(id)?.value||'').trim(); }
+
+// ── Número por extenso (pt-BR) ───────────────────────────────────────────────
+function _numWords(n){
+  if(!n||n<0) return 'zero';
+  const ones=['','um','dois','três','quatro','cinco','seis','sete','oito','nove',
+    'dez','onze','doze','treze','quatorze','quinze','dezesseis','dezessete','dezoito','dezenove'];
+  const tens=['','','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+  const huns=['','cem','duzentos','trezentos','quatrocentos','quinhentos',
+    'seiscentos','setecentos','oitocentos','novecentos'];
+  function h3(x){
+    if(x===0) return '';
+    if(x<20) return ones[x];
+    if(x<100){ const u=ones[x%10]; return tens[Math.floor(x/10)]+(u?' e '+u:''); }
+    const c=huns[Math.floor(x/100)]; const r=x%100;
+    if(r===0) return x===100?'cem':c;
+    return (x===100?'cem':c)+' e '+h3(r);
+  }
+  n=Math.floor(n);
+  const bi=Math.floor(n/1e9), mi=Math.floor((n%1e9)/1e6), ki=Math.floor((n%1e6)/1e3), ri=n%1e3;
+  const parts=[];
+  if(bi) parts.push(h3(bi)+(bi===1?' bilhão':' bilhões'));
+  if(mi) parts.push(h3(mi)+(mi===1?' milhão':' milhões'));
+  if(ki) parts.push(h3(ki)+' mil');
+  if(ri) parts.push(h3(ri));
+  return parts.join(' e ') || 'zero';
+}
+
+function _numExtenso(valor){
+  if(!valor||isNaN(valor)) return '';
+  const inteiro=Math.floor(valor);
+  const centavos=Math.round((valor-inteiro)*100);
+  let s='';
+  if(inteiro>0) s=_numWords(inteiro)+(inteiro===1?' real':' reais');
+  if(centavos>0){
+    const c=_numWords(centavos)+(centavos===1?' centavo':' centavos');
+    s=s?s+' e '+c:c;
+  }
+  return s||'zero reais';
+}
+
+function _parseBRL(s){
+  if(!s) return 0;
+  s=String(s).trim().replace(/^R\$\s*/,'');
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',','.');
+  else s=s.replace(/\./g,'');
+  return parseFloat(s)||0;
+}
+
+function _formatBRL(n){
+  return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function _setVal(id,v){ const el=document.getElementById(id); if(el) el.value=v; }
+
+function pmAutoCalc(){
+  const preco=_parseBRL(_pmVal('pm-preco'));
+  const numParc=parseInt(_pmVal('pm-num-parc'))||0;
+  const torna=_parseBRL(_pmVal('pm-torna'));
+  const indeniz=_parseBRL(_pmVal('pm-indenizacao'));
+  if(preco) _setVal('pm-preco-ext',_numExtenso(preco));
+  if(numParc) _setVal('pm-num-parc-ext',_numWords(numParc));
+  if(torna) _setVal('pm-torna-ext',_numExtenso(torna));
+  if(indeniz) _setVal('pm-indenizacao-ext',_numExtenso(indeniz));
+  // Parcel = torna (misto) or preco (dinheiro)
+  const base=torna||preco;
+  if(base&&numParc>0){
+    const vp=base/numParc;
+    _setVal('pm-val-parc',_formatBRL(vp));
+    _setVal('pm-val-parc-ext',_numExtenso(vp));
+  }
+}
+
+function pmOnCorrToggle(){
+  const yn=document.querySelector('input[name="pm-corr-yn"]:checked')?.value;
+  const f=document.getElementById('pm-corr-fields');
+  if(f){ f.style.display=yn==='sim'?'grid':'none'; }
+}
+function pmOnCorrIndiceChange(){
+  const v=document.getElementById('pm-corr-indice')?.value;
+  const w=document.getElementById('pm-corr-outro-wrap');
+  if(w) w.style.display=v==='outro'?'':'none';
+}
+function pmOnCorrDataBaseChange(){
+  const v=document.getElementById('pm-corr-data-base')?.value;
+  const w=document.getElementById('pm-corr-data-outro-wrap');
+  if(w) w.style.display=v==='outro'?'':'none';
+}
+// ────────────────────────────────────────────────────────────────────────────
+
+function _pmGetData(){
+  const rawDate = _pmVal('pm-data');
+  const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+  let dia='', mes='', ano='';
+  if(rawDate){
+    const d = new Date(rawDate+'T12:00:00');
+    dia = String(d.getDate()).padStart(2,'0');
+    mes = MESES[d.getMonth()];
+    ano = String(d.getFullYear());
+  }
+  const data = {
+    endereco: _pmVal('pm-endereco'),
+    lote: _pmVal('pm-lote'),
+    quadra: _pmVal('pm-quadra'),
+    setor: _pmVal('pm-setor'),
+    area: _pmVal('pm-area'),
+    matricula_num: _pmVal('pm-matricula-num'),
+    cartorio: _pmVal('pm-cartorio'),
+    proprietario: [_pmVal('pm-proprietario'), _pmVal('pm-proprietario2')].filter(Boolean).join(' e '),
+    proprietario1: _pmVal('pm-proprietario'),
+    proprietario2: _pmVal('pm-proprietario2'),
+    cuidados: _pmVal('pm-cuidados'),
+    proprietario_assinatura: _pmVal('pm-proprietario-ass') || [_pmVal('pm-proprietario'), _pmVal('pm-proprietario2')].filter(Boolean).join(' e '),
+    data_dia: dia, data_mes: mes, data_ano: ano,
+    preco: _pmVal('pm-preco'),
+    preco_ext: _pmVal('pm-preco-ext'),
+  };
+  if(_pmModelo==='dinheiro'||_pmModelo==='misto'){
+    data.num_parcelas = _pmVal('pm-num-parc');
+    data.num_parcelas_ext = _pmVal('pm-num-parc-ext');
+    data.valor_parcela = _pmVal('pm-val-parc');
+    data.valor_parcela_ext = _pmVal('pm-val-parc-ext');
+  }
+  if(_pmModelo==='permuta'||_pmModelo==='misto'){
+    data.area_perm = _pmVal('pm-area-perm');
+    data.area_perm_ext = _pmVal('pm-area-perm-ext');
+    data.tipo_perm = _pmVal('pm-tipo-perm');
+    data.indenizacao = _pmVal('pm-indenizacao');
+    data.indenizacao_ext = _pmVal('pm-indenizacao-ext');
+  }
+  if(_pmModelo==='misto'){
+    data.torna = _pmVal('pm-torna');
+    data.torna_ext = _pmVal('pm-torna-ext');
+  }
+  // Correction clause (dinheiro + misto)
+  if(_pmModelo==='dinheiro'||_pmModelo==='misto'){
+    const corrYN = document.querySelector('input[name="pm-corr-yn"]:checked')?.value;
+    if(corrYN==='sim'){
+      const rawIndice = document.getElementById('pm-corr-indice')?.value||'INCC';
+      const indice = rawIndice==='outro' ? _pmVal('pm-corr-outro') : rawIndice;
+      const rawDataBase = document.getElementById('pm-corr-data-base')?.value||'';
+      const dataBase = rawDataBase==='outro' ? _pmVal('pm-corr-data-outro') : rawDataBase;
+      data.correcao_indice = indice;
+      data.correcao_data_base = dataBase;
+      data.correcao_texto = `As parcelas serão corrigidas monetariamente pelo índice ${indice}, a partir da ${dataBase}, até a data do efetivo pagamento de cada parcela.`;
+    }
+  }
+  return data;
+}
+
+function _xmlEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function gerarPropostaDoc(formato){
+  if(!_pmModelo){ alert('Selecione um modelo de proposta.'); return; }
+  if(!document.getElementById('pm-preco')?.value.trim()){ alert('Informe o preço.'); return; }
+
+  const data = _pmGetData();
+  const b64 = PROPOSTA_TEMPLATES[_pmModelo];
+  if(!b64){ alert('Template não encontrado.'); return; }
+
+  // Fill template using PizZip — direct XML substitution
+  const binaryStr = atob(b64);
+  const bytes = new Uint8Array(binaryStr.length);
+  for(let i=0;i<binaryStr.length;i++) bytes[i]=binaryStr.charCodeAt(i);
+  const zip = new PizZip(bytes.buffer);
+
+  // Replace {field} placeholders in document.xml
+  let xml = zip.file('word/document.xml').asText();
+  Object.entries(data).forEach(([k,v])=>{
+    // docx placeholders may be split across runs; we handle simple {key} tokens
+    const token = new RegExp('\\{'+k+'\\}','g');
+    xml = xml.replace(token, _xmlEsc(String(v||'')));
+  });
+  // Inject correction clause paragraph if applicable
+  if(data.correcao_texto){
+    const corrPara = `<w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">Correção Monetária: </w:t></w:r><w:r><w:t xml:space="preserve">${_xmlEsc(data.correcao_texto)}</w:t></w:r></w:p>`;
+    xml = xml.replace('</w:body>', corrPara + '</w:body>');
+  }
+  zip.file('word/document.xml', xml);
+
+  const outContent = zip.generate({type:'uint8array', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  const out = new Blob([outContent], {type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+
+  // Save metadata + docx to localStorage
+  const rev = await _savePropostaRev(data, out, formato);
+
+  // Download .docx
+  const fn = `Proposta_YUNY_${PM_MODELO_LABELS[_pmModelo].replace(/\s|\+/g,'_')}_Rev${String(rev).padStart(2,'0')}.docx`;
+  const url = URL.createObjectURL(out);
+  const a = document.createElement('a');
+  a.href = url; a.download = fn; a.click();
+  setTimeout(()=>URL.revokeObjectURL(url), 5000);
+
+  if(formato==='pdf'){
+    _openPropostaPdfPreview(data);
+  }
+
+  closePropostaModal();
+  renderAtaSection();
+}
+
+async function _savePropostaRev(data, blob, formato){
+  const idx = terrenos.findIndex(t=>t.id===_pmTerrenoId);
+  if(idx<0) return 1;
+  const props = JSON.parse(JSON.stringify(terrenos[idx].propostas_formais||[]));
+  // Store docx as base64 in localStorage
+  const reader = new FileReader();
+  const key = `proposta_${_pmTerrenoId}_rev${props.length}`;
+  await new Promise(res=>{
+    reader.onload = e=>{ try{ localStorage.setItem(key, e.target.result); }catch(er){console.warn('localStorage full');} res(); };
+    reader.readAsDataURL(blob);
+  });
+  const meta = {
+    modelo: _pmModelo,
+    modelo_label: PM_MODELO_LABELS[_pmModelo],
+    proprietario: data.proprietario,
+    data_proposta: `${data.data_dia}/${data.data_mes||''}/${data.data_ano}`,
+    preco: data.preco,
+    gerado_em: new Date().toISOString(),
+    ls_key: key,
+  };
+  props.push(meta);
+  terrenos[idx].propostas_formais = props;
+  await db.collection('terrenos').doc(_pmTerrenoId).update({propostas_formais: props}).catch(console.warn);
+  return props.length;
+}
+
+function downloadPropostaRev(terrenoId, revIdx, formato){
+  const t = terrenos.find(x=>x.id===terrenoId);
+  const meta = t?.propostas_formais?.[revIdx];
+  if(!meta){ alert('Revisão não encontrada.'); return; }
+  const b64 = localStorage.getItem(meta.ls_key);
+  if(!b64){ alert('Arquivo não encontrado no armazenamento local.\nO documento pode ter sido gerado em outro computador.'); return; }
+
+  if(formato==='docx'){
+    const a = document.createElement('a');
+    a.href = b64;
+    a.download = `Proposta_YUNY_Rev${String(revIdx+1).padStart(2,'0')}_${(meta.modelo_label||'').replace(/\s/g,'_')}.docx`;
+    a.click();
+  } else {
+    // PDF: re-render the preview window
+    alert('Para PDF, abra o Word gerado e use Arquivo → Salvar como PDF,\nou use Ctrl+P → Salvar como PDF.');
+  }
+}
+
+function _openPropostaPdfPreview(data){
+  const meses = {janeiro:1,fevereiro:2,março:3,abril:4,maio:5,junho:6,julho:7,agosto:8,setembro:9,outubro:10,novembro:11,dezembro:12};
+  const w = window.open('','_blank');
+  if(!w) return;
+  // Build HTML preview matching proposal layout
+  const labelMap = {dinheiro:'100% DINHEIRO',permuta:'100% PERMUTA',misto:'DINHEIRO + PERMUTA'};
+  let paymentBlock = '';
+  if(_pmModelo==='dinheiro'){
+    paymentBlock = `<p>R$ ${data.preco} (${data.preco_ext}) em ${data.num_parcelas} (${data.num_parcelas_ext}) parcelas fixas, mensais e consecutivas de R$ ${data.valor_parcela} (${data.valor_parcela_ext}) cada, vencendo-se a primeira no prazo de 10 (dez) dias contados do comunicado da INCORPORADORA dando por superadas as Condições Resolutivas, contra a escritura de Compra e Venda do Imóvel, e as demais no mesmo dia dos meses subsequentes.</p>`;
+  } else if(_pmModelo==='permuta'){
+    paymentBlock = `<p>R$ ${data.preco} (${data.preco_ext}) da seguinte forma:</p>
+    <p>R$ ${data.preco} (${data.preco_ext}) por meio de dação em pagamento de ${data.area_perm} m² (${data.area_perm_ext} metros quadrados) de área privativa do Empreendimento, que corresponderão a futura(s) unidade(s) autônoma(s) com fins ${data.tipo_perm} (${data.tipo_perm});</p>
+    <p><strong>B.2. Indenização:</strong> O VENDEDOR fará jus ao recebimento do valor de R$ ${data.indenizacao} (${data.indenizacao_ext}) por mês, a título de aluguel virtual, estimados em 48 meses, podendo ser mais ou menos, até a entrega das chaves da área permutada.</p>`;
+  } else {
+    paymentBlock = `<p>R$ ${data.preco} (${data.preco_ext}) da seguinte forma:</p>
+    <p>R$ ${data.preco} (${data.preco_ext}) por meio de dação em pagamento de ${data.area_perm} m² (${data.area_perm_ext} metros quadrados) de área privativa do Empreendimento, que corresponderão a futura(s) unidade(s) autônoma(s) com fins ${data.tipo_perm} (${data.tipo_perm});</p>
+    <p>R$ ${data.torna} (${data.torna_ext}), a título de torna ("Torna"), a ser pago em ${data.num_parcelas} (${data.num_parcelas_ext}) parcelas mensais, fixas e consecutivas de R$ ${data.valor_parcela} (${data.valor_parcela_ext}) cada, vencendo-se a primeira no prazo de 10 (dez) dias contados do comunicado da INCORPORADORA dando por superadas as Condições Resolutivas, contra a outorga da escritura de Compra e Venda do Imóvel, e as demais no mesmo dia dos meses subsequentes.</p>
+    <p><strong>B.2. Indenização:</strong> O VENDEDOR fará jus ao recebimento do valor de R$ ${data.indenizacao} (${data.indenizacao_ext}) por mês, a título de aluguel virtual, estimados em 48 meses, podendo ser mais ou menos, até a entrega das chaves da área permutada.</p>`;
+  }
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Proposta YUNY</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Arial');
+  body{font-family:'Times New Roman',serif;font-size:12pt;margin:0;padding:0;color:#000;}
+  .page{width:210mm;min-height:297mm;margin:0 auto;padding:25mm 25mm 20mm;box-sizing:border-box;}
+  h1{text-align:center;font-size:13pt;font-weight:bold;margin:0 0 4px;}
+  .header-sub{text-align:center;font-size:11pt;margin-bottom:20px;}
+  .dest{margin-bottom:16px;}
+  .ref{font-weight:bold;margin-bottom:16px;}
+  p{text-align:justify;margin:8px 0;line-height:1.5;}
+  .section{font-weight:bold;margin-top:12px;}
+  .sig-block{margin-top:40px;text-align:center;}
+  .sig-line{border-top:1px solid #000;width:300px;margin:40px auto 4px;}
+  .footer-bar{background:#27BDBE;color:#fff;text-align:center;font-size:9pt;padding:6px;margin-top:20px;}
+  @media print{body{-webkit-print-color-adjust:exact;}}
+</style>
+</head><body>
+<div class="page">
+  <h1>PROPOSTA PARA AQUISIÇÃO DE IMÓVEL</h1>
+  <div class="header-sub">LOCALIZADO EM SÃO PAULO – SP</div>
+  <div class="dest">
+    <strong>Ao(s) Proprietário(s)</strong> ${data.proprietario}<br>
+    Aos cuidados de: ${data.cuidados}
+  </div>
+  <div class="ref">Ref.: Imóvel localizado na ${data.endereco}, equivalente ao lote ${data.lote}, da quadra fiscal ${data.quadra}, setor ${data.setor} com área de terreno igual a ${data.area}, conforme descrito e caracterizado na matrícula ${data.matricula_num} do ${data.cartorio} Cartório de Registro de Imóveis. (o "Imóvel")</div>
+  <p>Prezados(as) Senhores(as),</p>
+  <p>A Yuny INCORPORADORA HOLDING S.A. (a "Proponente"), empresa com sede na Capital do Estado de São Paulo, na Avenida Juscelino Kubitschek, nº 2.041, 9º andar, Torre D, CEP 04543-011, inscrita no CNPJ/MF nº 09.267.996/0001-70, vem, por meio da presente, apresentar proposta de aquisição do Imóvel, nos termos e condições adiante pactuados.</p>
+  <p>A Proponente, visando desenvolver empreendimento imobiliário destinado à incorporação imobiliária, nos termos da Lei Federal 4.591/64, vem, por meio desta, manifestar intenção na aquisição do Imóvel em referência, de sua propriedade, o que faz nos termos que seguem:</p>
+  <p class="section">Proposta</p>
+  <p><strong>A. Preço:</strong> R$ ${data.preco} (${data.preco_ext})</p>
+  <p class="section">B. Condições de Pagamento:</p>
+  ${paymentBlock}
+  <p><strong>B.1.</strong> Para todos os fins, o "Preço" é ajustado em caráter ad mensuram.</p>
+  <p class="section">C. Condições de Aquisição:</p>
+  <p>O(s) Proprietário(s) declara(m) estar ciente(s) que a presente Proposta de aquisição do Imóvel, destina-se à realização de empreendimento imobiliário pela YUNY no local, nos termos da Lei 4.591/64.</p>
+  <p>Como exceção ao princípio da irrevogabilidade e irretratabilidade deste documento, estabelecem as Partes, para todos os fins e efeitos de direito, nos exatos termos do art. 474 do Código Civil, que são condições indispensáveis à concretização, validade e eficácia do presente negócio, a critério exclusivo da YUNY, a superação das condições resolutivas, consistentes (i) nas análises e estudos sobre o Imóvel e o empreendimento imobiliário que pretende erigir no local e/ou em outros imóveis lindeiros a este e aprovação do conselho da YUNY, (ii) a viabilidade jurídica, técnica e urbanística nos moldes pretendidos pela YUNY, mercadológica e ambiental da aquisição do imóvel, (iii) rescisão do Contrato de Locação, (iv) aquisição dos imóveis contíguos.</p>
+  <p class="section">D. Documentação Preliminar:</p>
+  <p>Os Proprietários deverão disponibilizar os seguintes documentos, no prazo de 15 (quinze) dias contados desta data, para elaboração da Minuta do Compromisso de Venda e Compra:</p>
+  <p>- Matrícula(s) Atualizada(s) do(s) imóvel(eis);<br>
+     - Cópia(s) da(s) capa(s) de IPTU(s) do ano vigente;<br>
+     - Pessoa Física: RG, CPF, Certidão de casamento e comprovante de endereço dos proprietários;<br>
+     - Pessoa Jurídica: última alteração do contrato social, cartão do CNPJ e documentação pessoal dos sócios (RG, CPF e comprovante de endereço)<br>
+     - Cópia do(s) contrato(s) de locação e última alteração ou aditamento se houver;</p>
+  <p class="section">E. Condições Gerais:</p>
+  <p><strong>E.1.</strong> A presente proposta possui validade de 90 (noventa) dias contados desta data, sendo que, expirado este prazo, a proposta poderá, a critério da Proponente, (i) ser renovada por mais 30 (trinta) dias, ou (ii) ser considerada sem efeito, retornando as partes contratantes ao estado anterior ao de sua apresentação, sem quaisquer ônus ou penalidades de parte a parte.</p>
+  <p><strong>E.2.</strong> A celebração e conteúdo desta Proposta, bem como as informações trocadas pelas Partes, permanecerão confidenciais, entre elas e seus representantes autorizados, e não poderão ser divulgadas sem o prévio consentimento por escrito da outra parte.</p>
+  <p><strong>E.3.</strong> Fica estabelecido entre as partes que a Proponente poderá constituir uma Sociedade de Propósito Específico, a qual assumirá todas as obrigações e direitos decorrentes da presente e do futuro contrato a ser firmado entre as partes;</p>
+  <p><strong>E.4.</strong> Fica acordado entre as partes que as despesas relativas ao comissionamento incidente sobre o presente negócio jurídico serão de responsabilidade exclusiva da Proponente;</p>
+  <p>Sendo o que nos cumpria para o momento, aproveitamos a oportunidade para reiterar nossos votos de elevada estima e consideração e, no aguardo de eventual aceite, subscrevemo-nos.</p>
+  <p style="text-align:right;margin-top:20px;"><strong>Yuny Incorporadora Holding S.A</strong></p>
+  <p>Considerando que as condições aqui propostas atendem plenamente as demandas apresentadas por V.Sas. pedimos o aceite desta proposta como opção de compra com caráter de exclusividade, 90 (noventa) dias contados desta data para assim prosseguimos com as devidas providências para a elaboração do compromisso de compra e venda.</p>
+  <p><strong>De acordo do(s) proprietário(s):</strong></p>
+  <p style="text-align:center;">São Paulo, ${data.data_dia} de ${data.data_mes} de ${data.data_ano}.</p>
+  <div class="sig-block">
+    <div class="sig-line"></div>
+    <div>${data.proprietario_assinatura||data.proprietario}</div>
+  </div>
+  <div class="footer-bar">Yuny Incorporadora Holding S.A | Avenida Juscelino Kubitschek, nº 2.041, 9º andar, Torre D, Vila Olímpia – São Paulo/SP | CEP 04543-011 | www.yuny.com.br</div>
+</div>
+<script>window.onload=()=>{window.print();};<\/script>
+</body></html>`);
+  w.document.close();
+}
 </script>
+
+<!-- ── PROPOSTA MODAL ────────────────────────────────────────────── -->
+<div id="proposta-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;overflow-y:auto;padding:20px 10px;">
+  <div style="background:#fff;border-radius:14px;max-width:1100px;margin:0 auto;box-shadow:0 20px 60px rgba(0,0,0,.2);display:flex;min-height:80vh;overflow:hidden;position:relative;">
+
+    <!-- LEFT: Matrícula viewer -->
+    <div id="pm-matricula-panel" style="display:none;width:420px;min-width:420px;background:#1e1e2e;flex-shrink:0;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:#111827;">
+        <span style="font-size:11px;font-weight:700;color:#7c3aed;font-family:var(--mono);">📋 Matrícula — referência</span>
+        <button onclick="document.getElementById('pm-matricula-panel').style.display='none';document.getElementById('proposta-overlay').querySelector('.pm-form-col').style.maxWidth='';"
+          style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:16px;line-height:1;">✕</button>
+      </div>
+      <iframe id="pm-matricula-iframe" src="" style="flex:1;border:none;background:#fff;height:100%;min-height:600px;"></iframe>
+    </div>
+
+    <!-- NotebookLM response panel -->
+    <div id="pm-nlm-panel" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:20;display:none;align-items:center;justify-content:center;">
+      <div style="background:#fff;border-radius:12px;padding:28px;max-width:520px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);">
+        <div style="font-size:15px;font-weight:700;color:#111827;margin-bottom:6px;">🤖 NotebookLM — Cole a resposta</div>
+        <div style="font-size:12px;color:#6b7280;margin-bottom:14px;line-height:1.5;">
+          O PDF foi baixado e o NotebookLM foi aberto em nova aba.<br>
+          Faça o upload do PDF lá e envie esta pergunta:
+        </div>
+        <div style="background:#f3f4f6;border-radius:6px;padding:10px 12px;font-size:12px;font-family:monospace;color:#374151;margin-bottom:14px;cursor:pointer;border:1px solid #e5e7eb;"
+          onclick="navigator.clipboard.writeText(this.textContent);this.style.background='#d1fae5';setTimeout(()=>this.style.background='#f3f4f6',1200);"
+          title="Clique para copiar">Quem são os atuais proprietários deste imóvel? Informe também o número da matrícula e o nome completo do cartório de Registro de Imóveis. (Clique para copiar)</div>
+        <textarea id="pm-nlm-resposta" rows="6" placeholder="Cole aqui a resposta do NotebookLM..."
+          style="width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:6px;padding:10px;font-size:12px;resize:vertical;font-family:inherit;"></textarea>
+        <div style="display:flex;gap:10px;margin-top:14px;justify-content:flex-end;">
+          <button onclick="document.getElementById('pm-nlm-panel').style.display='none';"
+            style="padding:8px 16px;border-radius:6px;border:1px solid #d1d5db;background:#fff;font-size:12px;cursor:pointer;color:#374151;">Cancelar</button>
+          <button onclick="pmAplicarRespostaNLM()"
+            style="padding:8px 18px;border-radius:6px;border:none;background:#1a73e8;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">✅ Aplicar resposta</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Form -->
+    <div class="pm-form-col" style="flex:1;padding:28px;overflow-y:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <h2 style="margin:0;font-size:17px;font-weight:700;color:#111827;">📑 Elaborar Proposta de Aquisição</h2>
+        <div style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px;" id="pm-subtitle"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button id="pm-show-mat-btn" onclick="pmToggleMatricula()" style="display:none;padding:5px 10px;border-radius:6px;border:1px solid #7c3aed44;background:#ede9fe;color:#7c3aed;font-size:11px;font-weight:600;cursor:pointer;">📋 Ver Matrícula</button>
+        <button id="pm-extract-btn" onclick="pmExtrairMatricula()" style="display:none;padding:5px 10px;border-radius:6px;border:none;background:#7c3aed;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🔍 Extrair dados</button>
+        <button id="pm-nlm-btn" onclick="pmOpenNotebookLM()" style="display:none;padding:5px 10px;border-radius:6px;border:none;background:#1a73e8;color:#fff;font-size:11px;font-weight:600;cursor:pointer;">🤖 NotebookLM</button>
+        <button onclick="closePropostaModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:0 4px;">✕</button>
+      </div>
+    </div>
+
+    <!-- Modelo selector -->
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">1. Modelo da proposta</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;" id="pm-modelo-grid">
+        <button onclick="setPmModelo('dinheiro')" id="pm-btn-dinheiro"
+          style="padding:10px 6px;border-radius:8px;border:2px solid #e5e7eb;background:#f9fafb;font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;">
+          💵<br>100% Dinheiro
+        </button>
+        <button onclick="setPmModelo('permuta')" id="pm-btn-permuta"
+          style="padding:10px 6px;border-radius:8px;border:2px solid #e5e7eb;background:#f9fafb;font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;">
+          🏢<br>100% Permuta
+        </button>
+        <button onclick="setPmModelo('misto')" id="pm-btn-misto"
+          style="padding:10px 6px;border-radius:8px;border:2px solid #e5e7eb;background:#f9fafb;font-size:11px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;">
+          💵🏢<br>Dinheiro + Permuta
+        </button>
+      </div>
+    </div>
+
+    <!-- Dados do imóvel -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">2. Dados do imóvel</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="grid-column:span 2;">
+          <label style="font-size:11px;color:var(--muted);">Endereço</label>
+          <input id="pm-endereco" type="text" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Nº Matrícula</label>
+          <input id="pm-matricula-num" type="text" placeholder="ex: 12.345" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Cartório de RI (ex: 3º)</label>
+          <input id="pm-cartorio" type="text" placeholder="ex: 3º" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Lote (SQL / nº lote)</label>
+          <input id="pm-lote" type="text" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Área do terreno (m²)</label>
+          <input id="pm-area" type="text" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Quadra fiscal</label>
+          <input id="pm-quadra" type="text" placeholder="ex: 025" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Setor</label>
+          <input id="pm-setor" type="text" placeholder="ex: 003" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Destinatário -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">3. Destinatário</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Proprietário 1</label>
+          <input id="pm-proprietario" type="text" placeholder="Nome do proprietário" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Proprietário 2 <span style="color:#9ca3af;font-size:10px;">(se houver)</span></label>
+          <input id="pm-proprietario2" type="text" placeholder="Nome do 2º proprietário" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Aos cuidados de</label>
+          <input id="pm-cuidados" type="text" placeholder="Corretor / intermediário" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--muted);">Data da proposta</label>
+          <input id="pm-data" type="date" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+        <div style="grid-column:span 2;">
+          <label style="font-size:11px;color:var(--muted);">Nome(s) na assinatura</label>
+          <input id="pm-proprietario-ass" type="text" placeholder="Nome completo ou empresa (para assinatura)" style="width:100%;font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;box-sizing:border-box;margin-top:2px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- Condição Comercial (muda conforme modelo) -->
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;">4. Condição comercial</div>
+      <div id="pm-cond-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div style="grid-column:span 2;color:var(--muted);font-size:11px;font-family:var(--mono);">Selecione o modelo acima para ver os campos.</div>
+      </div>
+    </div>
+
+    <!-- Botões -->
+    <div style="display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;align-items:center;">
+      <button id="pm-btn-salvar" onclick="salvarDadosProposta()" style="padding:8px 16px;border-radius:8px;border:1px solid #d1d5db;background:#f3f4f6;font-size:12px;font-weight:600;cursor:pointer;color:#374151;">💾 Salvar dados</button>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button onclick="closePropostaModal()" style="padding:8px 20px;border-radius:8px;border:1px solid var(--border);background:#f9fafb;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);">Cancelar</button>
+        <button onclick="gerarPropostaDoc('pdf')" style="padding:8px 20px;border-radius:8px;border:none;background:#059669;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">📥 Baixar PDF</button>
+        <button onclick="gerarPropostaDoc('docx')" style="padding:8px 20px;border-radius:8px;border:none;background:#7c3aed;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">📄 Gerar Word</button>
+      </div>
+    </div>
+    </div><!-- /pm-form-col -->
+  </div>
+</div>
 
 <!-- ── FICHA DE AQUISIÇÃO MODAL ──────────────────────────────────── -->
 <div id="ficha-overlay">
