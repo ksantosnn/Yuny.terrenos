@@ -17115,4 +17115,407 @@ function mercImportExcel(input){
             if(m){ano=Number(m[1]);mes=Number(m[2]);dataNorm=`${ano}-${String(mes).padStart(2,'0')}`;}
           }
         }
-        c
+        const _n = k => { const v=_col(row,k); return v!==null&&v!==''?Number(v):null; };
+        const payload = {
+          nome:          String(_col(row,'Nome','nome','Empreendimento','empreendimento')||''),
+          incorporadora: String(_col(row,'Incorporadora','incorporadora','Construtora','')||''),
+          status:        String(_col(row,'Status','status')||'lançado').toLowerCase(),
+          bairro:        String(_col(row,'Bairro','bairro')||''),
+          regiao:        String(_col(row,'Região','regiao','Regiao')||''),
+          produto:       String(_col(row,'Produto','produto','Tipo','tipo')||''),
+          tipologia:     String(_col(row,'Tipologia','tipologia')||''),
+          unidades:      _n('Unidades')||_n('unidades')||_n('Total Unidades'),
+          vgv:           _n('VGV')||_n('vgv'),
+          vso:           _n('VSO')||_n('vso')||_n('VSO Lançamento')||_n('VSO (%)')||_n('VSO%'),
+          pct_vendida:   _n('% Vendida')||_n('pct_vendida'),
+          pv_tabela:     _n('PV Tabela')||_n('pv_tabela')||_n('Preço Tabela')||_n('PV Tabela (R$/m²)'),
+          pv_fech:       _n('PV Fechamento')||_n('pv_fech')||_n('Preço Fechamento'),
+          area_priv:     _n('Área Privativa')||_n('area_priv')||_n('Área Média')||_n('Area'),
+          torres:        _n('Torres')||_n('torres'),
+          diferenciais:  String(_col(row,'Diferenciais','diferenciais')||''),
+          obs:           String(_col(row,'Obs','observacoes','Observações','obs')||''),
+          img_url:       String(_col(row,'Imagem','img_url','URL Imagem')||''),
+          logo_url:      String(_col(row,'Logo','logo_url','URL Logo')||''),
+          data_lancamento: dataNorm, ano, mes,
+          created_at: new Date().toISOString(),
+        };
+        if(!payload.nome) return;
+        batch.set(db.collection('lancamentos').doc(), payload);
+      });
+      await batch.commit();
+      alert(`✅ ${rows.length} lançamento(s) importado(s) com sucesso!`);
+      input.value='';
+    }catch(err){ alert('Erro ao importar: '+err.message); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+// ── SEED: importa os 6 empreendimentos da planilha base ──────────────────────
+async function _seedLancamentos(){
+  const dados = [
+    {
+      nome:'Eterno Alma Brasileira', incorporadora:'SETIN', status:'lançado',
+      bairro:'Paraíso', regiao:'Zona Sul', produto:'Residencial Ultra Premium',
+      tipologia:'Apartamento 4 suítes (300m²) e Cobertura Duplex (588m²)',
+      unidades:56, torres:1, area_priv:300,
+      pv_tabela:null, pv_fech:null, vgv:null, vso:null, pct_vendida:null,
+      data_lancamento:'2025-06', ano:2025, mes:6,
+      diferenciais:'Piscina coberta c/ raia 25m · Quadra de tênis de saibro coberta · Quadra de pickleball/futebol · Academia 180m² · Spa + sauna úmida e seca · Salão de festas · Playground/Brinquedoteca · Decorado no stand\nArquitetura: LE Arquitetos · Paisagismo: Eduardo Mera · Interiores: Dado Castello Branco\nVista para o Parque do Ibirapuera',
+      obs:'Abertura para clientes: 09/05/2025 · Abertura do decorado: 13/06/2025 · Lançamento oficial: 20/06/2025',
+      img_url:'https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-02---Fachada-Rua-Manoel-da-Nobrega_HR0.avif',
+      logo_url:'https://www.eternoalmabrasileira.com.br/images/setin.svg',
+      imgs_extra:['https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-38---Fachada-Noturna-Vista-Paulista_HR0.jpg','https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-01---Fachada-Rua-Tutoia_HR1.avif'],
+    },
+    {
+      nome:'Renato 410', incorporadora:'EVEN', status:'lançado',
+      bairro:'Itaim Bibi', regiao:'Zona Oeste / Faria Lima', produto:'Residencial Ultra Premium',
+      tipologia:'Gardens 300,68m² · Tipo 276,38m² · Duplex 506,59m² · Cob. Duplex 549,44m²',
+      unidades:48, torres:1, area_priv:276,
+      pv_tabela:null, pv_fech:null, vgv:null, vso:null, pct_vendida:null,
+      data_lancamento:'2025-01', ano:2025, mes:1,
+      diferenciais:'Arquitetura: Königsberger Vannucchi · Paisagismo: Núcleo Paisagismo · Interiores: Gui Mattos\nPiscina coberta c/ raia 25m · Piscinas adulto e infantil · Quadra de tênis de saibro coberta · Quadra de pickleball/futebol · Academia (Technogym) · Sala de pilates · Spa + sauna + hidromassagem · Sala de massagem · Sports Bar · Salão de festas · Playground/Brinquedoteca · Terraço externo · Bar de apoio piscina · Decorado no stand\nSmarthome EVEN · CFTV · Guarita vidro blindado · 2 geradores · Wi-Fi áreas comuns · Sensores de movimento\nColeta de água de chuva · Tintas baixo VOC · Reciclagem de entulho · Madeira de reflorestamento · 100% carbono neutro (EVEN)\nOffice exclusivo incluso (14,17 a 34,59m² por unidade)',
+      obs:'Rua Dr. Renato Paes de Barros, 410 – Próximo Av. Faria Lima, JK Iguatemi, Parque do Povo\n31 pavimentos + subsolos · Área terreno: 2.482,67m² · 4 elevadores',
+      img_url:'https://evenautoatendimento.blob.core.windows.net/site-container/94afdd04-a012-4594-aa01-fc6a2da6ce40-27032026221850.png',
+      logo_url:'',
+      imgs_extra:['https://evenautoatendimento.blob.core.windows.net/site-container/7177254c-1a63-45c5-af78-a239716ffcff-27032026220941.png'],
+    },
+    {
+      nome:'La Galerie', incorporadora:'Cyrela | Nortis', status:'lançado',
+      bairro:'Moema', regiao:'Zona Sul', produto:'Residencial Ultra Premium',
+      tipologia:'Apto T1 (416m²) · Cob. Duplex T1 (770m²) · Apto T2 (345m²) · Apto T2 (283m²) · Casa T2 (569m²) · Casa T2 (442m²) · Cob. Duplex T2 (527m²) · Cob. Duplex T2 (649m²)',
+      unidades:68, torres:2, area_priv:345,
+      pv_tabela:33000, pv_fech:null, vgv:765000000, vso:null, pct_vendida:null,
+      data_lancamento:'2025-01', ano:2025, mes:1,
+      diferenciais:'Piscinas adulta e infantil · Fitness · SPA + sauna seca + massagem + beauty room · Brinquedoteca + playground · Certificação AQUA (Fundação Vanzolini)\nRua Gaivota, 530 – Moema Pássaros',
+      obs:'Área terreno: 4.420m² · 2 torres · 26 pavimentos · VGV: R$ 765MM',
+      img_url:'https://lagalerie.cyrela.com.br/apartamentos-bg.webp',
+      logo_url:'https://lagalerie.cyrela.com.br/logo-cyrela.svg',
+      imgs_extra:['https://lagalerie.cyrela.com.br/opengraph-image.jpeg','https://lagalerie.cyrela.com.br/galery/PERSPECTIVA%20ILUSTRADA%20DO%20LOBBY%20DA%20TORRE%201.webp'],
+    },
+    {
+      nome:'Naeem', incorporadora:'Mitre Realty', status:'lançado',
+      bairro:'Pinheiros', regiao:'Zona Oeste', produto:'Residencial Ultra Premium',
+      tipologia:'Apartamento 189m² · Apartamento 249m² · Duplex 366m² · Penthouse 485m²',
+      unidades:125, torres:1, area_priv:249,
+      pv_tabela:27800, pv_fech:25200, vgv:825000000, vso:null, pct_vendida:null,
+      data_lancamento:'2025-03', ano:2025, mes:3,
+      diferenciais:'Arquitetura: Königsberger Vannucchi · Paisagismo: Benedito Abbud · Interiores: NKEY Architects (Dubai)\nPiscina coberta 25m · Recovery Lab (crioterapia, biohacking) · Academia Bodytech/Technogym · Quadra de tênis Head (oficial) · Kids Acqua Park · Concierge Daslu · VGV: R$ 825MM',
+      obs:'Rua Capote Valente, 989 – Pinheiros · 5.000m² de terreno · 33 pavimentos\nNome em árabe: "bem-estar pleno"',
+      img_url:'https://naempinheiros.com.br/wp-content/uploads/2026/02/img241.jpg',
+      logo_url:'',
+      imgs_extra:['https://naempinheiros.com.br/wp-content/uploads/elementor/thumbs/Naeem_Book-compactado_page-0007-scaled-rjsfunulanboz59lyh37civ5tuevz2qw48qsxfd3wg.jpg','https://naempinheiros.com.br/wp-content/uploads/2026/02/2524982-1024x693.png'],
+    },
+    {
+      nome:'LUX 590 Itaim', incorporadora:'Grupo LUX', status:'lançado',
+      bairro:'Itaim Bibi', regiao:'Zona Oeste / Faria Lima', produto:'Residencial Ultra Premium',
+      tipologia:'Tipo 252-294m² · Garden 352m² · Duplex 478m² · Cob. Duplex 480m²',
+      unidades:17, torres:1, area_priv:272,
+      pv_tabela:null, pv_fech:null, vgv:null, vso:null, pct_vendida:null,
+      data_lancamento:'2025-01', ano:2025, mes:1,
+      diferenciais:'Piscina coberta c/ raia 25m aquecida · Academia completa · Salão de festas + espaço gourmet · Brinquedoteca · Sauna · Portaria blindada · Gerador full · Floreiras com irrigação automatizada · Locker inteligente para delivery · Subsolo com inclinação para veículos esportivos\nArquitetura: Pablo Slemenson · 1 unidade por andar · Previsão entrega: jan/2029',
+      obs:'Rua Jesuíno Arruda, 590 – esquina Rua Bandeira Paulista · 17 pavimentos',
+      img_url:'https://iapartamentos.com.br/wp-content/uploads/2025/05/Fachada-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg',
+      logo_url:'',
+      imgs_extra:['https://iapartamentos.com.br/wp-content/uploads/2025/05/Fachada-2-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg','https://iapartamentos.com.br/wp-content/uploads/2025/05/Piscina-Coberta-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg'],
+    },
+    {
+      nome:'Janô', incorporadora:'RFM', status:'lançado',
+      bairro:'Itaim Bibi', regiao:'Zona Oeste / Faria Lima', produto:'Residencial Ultra Premium',
+      tipologia:'Garden 191m² · Garden 242m² · Tipo 150m² · Duplex 185m² · Cob. Duplex 234m² · Cob. Duplex 246m²',
+      unidades:null, torres:1, area_priv:191,
+      pv_tabela:38000, pv_fech:null, vgv:null, vso:null, pct_vendida:null,
+      data_lancamento:'2025-06', ano:2025, mes:6,
+      diferenciais:'Arquitetura: Zien Arquitetura · Interiores: Dado Castello Branco · Paisagismo: Roberto Riscala\nPiscina c/ raia 25m · Studio pilates · Sala de yoga · Sauna úmida e seca · Academia · Brinquedoteca · SPA · Salão de festas · Pet Place · Office e depósito privativos',
+      obs:'Rua Bandeira Paulista, 669 – Itaim Bibi · Área terreno: 1.500m² · 31 pavimentos · Preço previsto: R$ 38.000/m²',
+      img_url:'https://www.rfm.com.br/wp-content/uploads/2025/10/jano-01-1.webp',
+      logo_url:'https://www.rfm.com.br/wp-content/themes/rfm/images/rfm-logo.svg',
+      imgs_extra:['https://www.rfm.com.br/wp-content/uploads/2025/10/jano-02-1.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-03-1.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-04-1.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-06-1.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-07-1.webp'],
+    },
+  ];
+  let ok = 0;
+  for(const d of dados){
+    d.created_at = new Date().toISOString();
+    await db.collection('lancamentos').add(d);
+    ok++;
+  }
+  console.log(`✅ ${ok} empreendimentos importados.`);
+  alert(`✅ ${ok} empreendimentos importados com sucesso!`);
+}
+
+// ── ATUALIZAR IMAGENS dos registros existentes ────────────────────────────────
+async function _atualizarImagens(){
+  const imagens = {
+    // Eterno: fachada noturna em JPG (sem texto de marketing)
+    'Eterno Alma Brasileira': {
+      img_url:'https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-38---Fachada-Noturna-Vista-Paulista_HR0.jpg',
+      logo_url:'',
+      imgs_extra:['https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-02---Fachada-Rua-Manoel-da-Nobrega_HR0.avif','https://www.eternoalmabrasileira.com.br/images/SETIN_Tutoia-01---Fachada-Rua-Tutoia_HR1.avif'],
+    },
+    // Renato 410: Azure Blob (sem hotlink protection) — já funcionava
+    'Renato 410': {
+      img_url:'https://evenautoatendimento.blob.core.windows.net/site-container/94afdd04-a012-4594-aa01-fc6a2da6ce40-27032026221850.png',
+      logo_url:'',
+      imgs_extra:['https://evenautoatendimento.blob.core.windows.net/site-container/7177254c-1a63-45c5-af78-a239716ffcff-27032026220941.png'],
+    },
+    // La Galerie: OG image da Cyrela (fachada do empreendimento)
+    'La Galerie': {
+      img_url:'https://lagalerie.cyrela.com.br/opengraph-image.jpeg',
+      logo_url:'',
+      imgs_extra:['https://lagalerie.cyrela.com.br/conceito-bg.webp','https://lagalerie.cyrela.com.br/galery/PERSPECTIVA%20ILUSTRADA%20DO%20LOBBY%20DA%20TORRE%201.webp'],
+    },
+    // Naeem: imagem exterior/book da arquitetura (Königsberger Vannucchi)
+    'Naeem': {
+      img_url:'https://naempinheiros.com.br/wp-content/uploads/elementor/thumbs/Naeem_Book-compactado_page-0007-scaled-rjsfunulanboz59lyh37civ5tuevz2qw48qsxfd3wg.jpg',
+      logo_url:'',
+      imgs_extra:['https://naempinheiros.com.br/wp-content/uploads/2026/02/2524982-1024x693.png','https://naempinheiros.com.br/wp-content/uploads/2026/02/img241.jpg'],
+    },
+    // LUX 590: já funcionava (iapartamentos.com.br, WordPress)
+    'LUX 590 Itaim': {
+      img_url:'https://iapartamentos.com.br/wp-content/uploads/2025/05/Fachada-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg',
+      logo_url:'',
+      imgs_extra:['https://iapartamentos.com.br/wp-content/uploads/2025/05/Fachada-2-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg','https://iapartamentos.com.br/wp-content/uploads/2025/05/Piscina-Coberta-LUX-590-Itaim-Breve-Lancamento-no-Itaim-Bibi-Rua-Bandeira-Paulista.jpg'],
+    },
+    // Janô: OG thumbnail RFM (416x416) + versões 636x490 como galeria
+    'Janô': {
+      img_url:'https://www.rfm.com.br/wp-content/uploads/2025/10/tbn-jano-1.webp',
+      logo_url:'',
+      imgs_extra:['https://www.rfm.com.br/wp-content/uploads/2025/10/jano-01-1-636x490.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-02-1-636x490.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-03-1-636x490.webp','https://www.rfm.com.br/wp-content/uploads/2025/10/jano-04-1-636x490.webp'],
+    },
+  };
+  let ok=0;
+  for(const l of _lancamentos){
+    const upd = imagens[l.nome];
+    if(upd){ await db.collection('lancamentos').doc(l.id).update(upd); ok++; }
+  }
+  alert(`✅ Imagens atualizadas em ${ok} empreendimentos!`);
+}
+
+// ── EXPORTAR EXCEL ────────────────────────────────────────────────────────────
+function mercExportExcel(){
+  const rows = _lancamentos.map(l=>({
+    'Nome': l.nome||'',
+    'Incorporadora': l.incorporadora||'',
+    'Status': l.status||'',
+    'Bairro': l.bairro||'',
+    'Região': l.regiao||'',
+    'Data de Lançamento': l.data_lancamento||'',
+    'Produto': l.produto||'',
+    'Tipologia': l.tipologia||'',
+    'Unidades': l.unidades||'',
+    'VGV': l.vgv||'',
+    'VSO (%)': l.vso||'',
+    '% Vendida': l.pct_vendida||'',
+    'PV Tabela (R$/m²)': l.pv_tabela||'',
+    'PV Fechamento (R$/m²)': l.pv_fech||'',
+    'Área Privativa (m²)': l.area_priv||'',
+    'Torres': l.torres||'',
+    'Diferenciais': l.diferenciais||'',
+    'Obs': l.obs||'',
+    'Imagem': l.img_url||'',
+    'Logo': l.logo_url||'',
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Mercado SP');
+  XLSX.writeFile(wb,'Mercado_SP_'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+
+// ── WIDGET DE FEEDBACK / SUGESTÕES DE MELHORIA ────────────────────────────────
+// Coleção Firestore `feedback`: { usuario_handle, usuario_nome, usuario_email,
+//   texto, status ('novo'|'respondido'), resposta, resposta_por_handle,
+//   resposta_por_nome, created_at, respondido_at }
+// Qualquer membro de EQUIPE pode ver e responder as sugestões de todos.
+let _feedbackList = [];
+
+function initFeedbackWidget(){
+  // Na primeira vez que o widget existir no navegador, considera o histórico
+  // existente como "já visto" para não disparar um badge cheio de itens antigos.
+  if(!localStorage.getItem('yuny_feedback_seen')){
+    localStorage.setItem('yuny_feedback_seen', String(Date.now()));
+  }
+  db.collection('feedback').orderBy('created_at','desc').onSnapshot(snap => {
+    _feedbackList = [];
+    snap.forEach(doc => _feedbackList.push({ id: doc.id, ...doc.data() }));
+    renderFeedbackWidget();
+  }, e => console.warn('Feedback:', e));
+}
+
+function _feedbackTimestampMillis(f){
+  const t = f.respondido_at || f.created_at;
+  if(!t) return 0;
+  if(typeof t.toMillis === 'function') return t.toMillis();
+  if(t instanceof Date) return t.getTime();
+  return 0;
+}
+
+function _feedbackNaoVistos(){
+  const seen = parseInt(localStorage.getItem('yuny_feedback_seen')||'0', 10);
+  return _feedbackList.filter(f => _feedbackTimestampMillis(f) > seen).length;
+}
+
+function toggleFeedbackPanel(){
+  const panel = document.getElementById('feedback-panel');
+  if(!panel) return;
+  const abrindo = panel.style.display !== 'flex';
+  panel.style.display = abrindo ? 'flex' : 'none';
+  if(abrindo){
+    localStorage.setItem('yuny_feedback_seen', String(Date.now()));
+  }
+  renderFeedbackWidget();
+}
+
+let _feedbackEditingId = null;
+
+function renderFeedbackItem(f){
+  const eu = getUsuarioAtual();
+  const isOwner = !!(eu && f.usuario_handle === eu.handle);
+  const data = f.created_at?.toDate ? f.created_at.toDate() : new Date();
+  const dataStr = data.toLocaleDateString('pt-BR')+' '+data.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  const respondido = f.status === 'respondido';
+  const editando = _feedbackEditingId === f.id;
+
+  const acoesDono = isOwner && !editando ? `
+        <span style="display:flex;gap:8px;flex-shrink:0;">
+          <button onclick="editarFeedback('${f.id}')" title="Editar" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:0;">✏️</button>
+          <button onclick="excluirFeedback('${f.id}')" title="Excluir" style="background:none;border:none;color:#9ca3af;cursor:pointer;font-size:12px;padding:0;">🗑️</button>
+        </span>` : '';
+
+  const corpoTexto = editando ? `
+      <div style="margin-bottom:7px;">
+        <textarea id="fb-edit-${f.id}" style="width:100%;min-height:50px;border:1px solid #e5e7eb;border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:var(--sans,Arial,sans-serif);box-sizing:border-box;resize:vertical;">${escHtml(f.texto||'')}</textarea>
+        <div style="display:flex;gap:6px;margin-top:5px;">
+          <button onclick="salvarEdicaoFeedback('${f.id}')" style="background:var(--teal,#00B0B9);color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;">Salvar</button>
+          <button onclick="cancelarEdicaoFeedback()" style="background:#f3f4f6;color:#374151;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>` : `
+      <div style="font-size:12.5px;color:#111;margin-bottom:7px;line-height:1.4;">${escHtml(f.texto||'')}${f.editado_at ? ' <span style="color:#9ca3af;font-size:10.5px;">(editado)</span>' : ''}</div>`;
+
+  return `
+    <div style="padding:10px 0;border-bottom:1px solid #f3f4f6;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+        <span style="font-size:11px;color:#9ca3af;">${escHtml(f.usuario_nome||'—')} · ${dataStr}</span>
+        ${acoesDono}
+      </div>
+      ${corpoTexto}
+      ${editando ? '' : (respondido ? `
+        <div style="background:#f0fdfa;border-left:3px solid #00B0B9;padding:6px 10px;border-radius:0 6px 6px 0;font-size:12px;color:#005f63;line-height:1.4;">
+          <b>${escHtml(f.resposta_por_nome||'Equipe')}:</b> ${escHtml(f.resposta||'')}
+        </div>` : `
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="fb-resp-${f.id}" placeholder="Responder…" onkeydown="if(event.key==='Enter')responderFeedback('${f.id}')" style="flex:1;border:1px solid #e5e7eb;border-radius:6px;padding:5px 8px;font-size:12px;box-sizing:border-box;">
+          <button onclick="responderFeedback('${f.id}')" style="background:var(--navy,#1a3c4d);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0;">Responder</button>
+        </div>`)}
+    </div>`;
+}
+
+function editarFeedback(id){
+  _feedbackEditingId = id;
+  renderFeedbackWidget();
+}
+
+function cancelarEdicaoFeedback(){
+  _feedbackEditingId = null;
+  renderFeedbackWidget();
+}
+
+function salvarEdicaoFeedback(id){
+  const ta = document.getElementById('fb-edit-'+id);
+  const novoTexto = (ta?.value||'').trim();
+  if(!novoTexto){ showToast('O comentário não pode ficar vazio'); return; }
+  db.collection('feedback').doc(id).update({
+    texto: novoTexto,
+    editado_at: firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(() => {
+    _feedbackEditingId = null;
+    showToast('Sugestão atualizada');
+  }).catch(e => {
+    console.warn('Feedback editar:', e);
+    showToast('Erro ao salvar edição. Tente novamente.');
+  });
+}
+
+function excluirFeedback(id){
+  if(!confirm('Excluir esta sugestão? Essa ação não pode ser desfeita.')) return;
+  db.collection('feedback').doc(id).delete().then(() => {
+    showToast('Sugestão excluída');
+  }).catch(e => {
+    console.warn('Feedback excluir:', e);
+    showToast('Erro ao excluir sugestão. Tente novamente.');
+  });
+}
+
+function renderFeedbackWidget(){
+  const badge = document.getElementById('feedback-badge');
+  if(badge){
+    const naoVistos = _feedbackNaoVistos();
+    if(naoVistos > 0){ badge.style.display = 'flex'; badge.textContent = naoVistos > 9 ? '9+' : String(naoVistos); }
+    else badge.style.display = 'none';
+  }
+  const lista = document.getElementById('feedback-lista');
+  if(lista){
+    lista.innerHTML = _feedbackList.length
+      ? _feedbackList.map(renderFeedbackItem).join('')
+      : '<div style="text-align:center;color:#9ca3af;font-size:12px;padding:24px 0;">Nenhuma sugestão ainda. Seja o primeiro a contribuir!</div>';
+  }
+}
+
+function enviarFeedback(){
+  const eu = getUsuarioAtual();
+  if(!eu){ showIdentityModal(); return; }
+  const ta = document.getElementById('feedback-texto');
+  const texto = (ta?.value||'').trim();
+  if(!texto){ showToast('Escreva sua sugestão antes de enviar'); return; }
+  db.collection('feedback').add({
+    usuario_handle: eu.handle,
+    usuario_nome: eu.nome,
+    usuario_email: eu.email,
+    texto,
+    status: 'novo',
+    resposta: '',
+    resposta_por_handle: '',
+    resposta_por_nome: '',
+    created_at: firebase.firestore.FieldValue.serverTimestamp(),
+    respondido_at: null,
+  }).then(() => {
+    ta.value = '';
+    showToast('Sugestão enviada — obrigado pelo feedback! 🙌');
+  }).catch(e => {
+    console.warn('Feedback:', e);
+    showToast('Erro ao enviar sugestão. Tente novamente.');
+  });
+}
+
+function responderFeedback(id){
+  const eu = getUsuarioAtual();
+  if(!eu){ showIdentityModal(); return; }
+  const input = document.getElementById('fb-resp-'+id);
+  const resposta = (input?.value||'').trim();
+  if(!resposta){ showToast('Escreva uma resposta antes de enviar'); return; }
+  const item = _feedbackList.find(f => f.id === id);
+  db.collection('feedback').doc(id).update({
+    resposta,
+    status: 'respondido',
+    resposta_por_handle: eu.handle,
+    resposta_por_nome: eu.nome,
+    respondido_at: firebase.firestore.FieldValue.serverTimestamp(),
+  }).then(() => {
+    showToast('Resposta enviada!');
+    // Notificar o autor por e-mail (se configurado e a resposta não for dele mesmo)
+    if(item && item.usuario_email && item.usuario_handle !== eu.handle && EMAILJS_SERVICE_ID !== 'YOUR_SERVICE_ID'){
+      emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: item.usuario_email,
+        to_name: item.usuario_nome,
+        subject: 'Sua sugestão no Terrenos SP foi respondida',
+        message: '<p>Sua sugestão:</p><p style="color:#555;font-style:italic;">"'+escHtml(item.texto||'')+'"</p><p><b>'+escHtml(eu.nome)+'</b> respondeu:</p><p>'+escHtml(resposta)+'</p>',
+        from_name: 'Terrenos SP — YUNY',
+      }).catch(e => console.warn('EmailJS (feedback):', e));
+    }
+  }).catch(e => {
+    console.warn('Feedback resposta:', e);
+    showToast('Erro ao enviar resposta. Tente novamente.');
+  });
+}
+</script>
+
+</body>
+</html>
