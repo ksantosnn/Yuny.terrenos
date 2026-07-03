@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" xmlns:mso="urn:schemas-microsoft-com:office:office" xmlns:msdt="uuid:C2F41010-65B3-11d1-A29F-00AA00C14882">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1276,14 +1276,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
 <!-- Tesseract.js OCR — carregado sob demanda em _ocrPdfPage() -->
-
-<!--[if gte mso 9]><xml>
-<mso:CustomDocumentProperties>
-<mso:_dlc_DocId msdt:dt="string">PN5SERDTH7CF-1304619134-393557</mso:_dlc_DocId>
-<mso:_dlc_DocIdItemGuid msdt:dt="string">e5bc782f-c1eb-4469-a154-ddb60ef60b12</mso:_dlc_DocIdItemGuid>
-<mso:_dlc_DocIdUrl msdt:dt="string">https://yuny.sharepoint.com/sites/YUNYGROUP/_layouts/15/DocIdRedir.aspx?ID=PN5SERDTH7CF-1304619134-393557, PN5SERDTH7CF-1304619134-393557</mso:_dlc_DocIdUrl>
-</mso:CustomDocumentProperties>
-</xml><![endif]-->
 </head>
 <body>
 <div id="ata-modal-wrap" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:1000;width:min(860px,92vw);max-height:88vh;overflow-y:auto;background:#fff;border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.3);padding:24px 28px;transition:width .2s;"></div>
@@ -1320,14 +1312,14 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
         </select>
         <div id="filter-status-wrap" style="position:relative;">
           <button type="button" id="filter-status-btn" onclick="_toggleStatusDropdown()" style="width:100%;text-align:left;background:#fff;border:1px solid #d1d5db;border-radius:6px;padding:6px 28px 6px 10px;font-size:13px;font-family:var(--sans);color:#374151;cursor:pointer;position:relative;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-            Negociando <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#9ca3af;">▼</span>
+            Todos os status <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:10px;color:#9ca3af;">▼</span>
           </button>
           <div id="filter-status-dropdown" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #d1d5db;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:9999;padding:6px 0;min-width:160px;">
             <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:var(--sans);color:#374151;user-select:none;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
-              <input type="checkbox" data-val="" onchange="_onStatusCbChange(this)" style="accent-color:#00B0B9;"> Todos
+              <input type="checkbox" data-val="" checked onchange="_onStatusCbChange(this)" style="accent-color:#00B0B9;"> Todos
             </label>
             <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:var(--sans);color:#15803d;user-select:none;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
-              <input type="checkbox" data-val="3.Negociando" checked onchange="_onStatusCbChange(this)" style="accent-color:#22c55e;"> Negociando
+              <input type="checkbox" data-val="3.Negociando" onchange="_onStatusCbChange(this)" style="accent-color:#22c55e;"> Negociando
             </label>
             <label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:13px;font-family:var(--sans);color:#0369a1;user-select:none;" onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background=''">
               <input type="checkbox" data-val="4.Análise" onchange="_onStatusCbChange(this)" style="accent-color:#00B0B9;"> Análise
@@ -1734,7 +1726,9 @@ let _seeded = false;
 let _geocodeStarted = false;
 
 // ── ANTHROPIC API ────────────────────────────────────────────────────────────
-const ANTHROPIC_API_KEY = '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';
+// A extração por IA (print/texto → dados do terreno) agora roda no servidor,
+// via POST /api/extrair-terreno — a chave da Anthropic fica só em
+// anthropic_config.json (nunca neste arquivo, que é público no GitHub Pages).
 
 async function processarPlanilha(rows){
   let headerIdx = -1;
@@ -2548,21 +2542,18 @@ function _showAvendaLinksManual(lat, lng){
   const body  = document.getElementById('avenda-panel-body');
   const addrEl = document.getElementById('avenda-panel-addr');
   if(!panel || !body) return;
-  // Bbox aproximada para links
-  const d = 0.005; // ~500m
-  const bbox = `${lat-d},${lng-d},${lat+d},${lng+d}`;
   if(addrEl) addrEl.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   body.innerHTML = `
     <div style="padding:8px 0 4px;font-size:12px;color:var(--muted);">
-      As APIs do VivaReal e ZAP não retornaram resultados para essa área neste momento. Pesquise manualmente:
+      Não foi possível consultar o servidor local. Pesquise manualmente:
     </div>
     <div class="avenda-links-row">
-      <a class="avenda-link-btn" href="https://www.vivareal.com.br/mapa/#viewport=${bbox}&business=SALE" target="_blank">🟢 VivaReal</a>
-      <a class="avenda-link-btn" href="https://www.zapimoveis.com.br/venda/imoveis/sp+sao-paulo/?viewport=${bbox}" target="_blank">🔵 ZAP Imóveis</a>
-      <a class="avenda-link-btn" href="https://www.olx.com.br/imoveis/venda/terrenos-lotes/estado-sp?re=sp" target="_blank">🟣 OLX</a>
+      <a class="avenda-link-btn" href="https://www.vivareal.com.br/venda/sp/sao-paulo/" target="_blank">🟢 VivaReal</a>
+      <a class="avenda-link-btn" href="https://www.zapimoveis.com.br/venda/imoveis/sp+sao-paulo/" target="_blank">🔵 ZAP Imóveis</a>
+      <a class="avenda-link-btn" href="https://www.olx.com.br/imoveis/estado-sp/sao-paulo-e-regiao" target="_blank">🟣 OLX</a>
       <a class="avenda-link-btn" href="https://www.quintoandar.com.br/comprar/imovel/sao-paulo-sp-brasil" target="_blank">🔴 QuintoAndar</a>
     </div>
-    <div style="font-size:10px;color:var(--muted);margin-top:8px;">Reinicie o servidor para limpar o cache e tente novamente.</div>
+    <div style="font-size:10px;color:var(--muted);margin-top:8px;">Verifique se o servidor local (iniciar-servidor.bat) está rodando e tente novamente.</div>
   `;
   panel.classList.add('open');
 }
@@ -5188,7 +5179,7 @@ function updateFilters(){
   });
 }
 
-let _statusFilters = new Set(['3.Negociando']); // default: Negociando
+let _statusFilters = new Set(); // default: Todos os status
 
 function _toggleStatusDropdown(){
   const dd = document.getElementById('filter-status-dropdown');
@@ -8926,19 +8917,15 @@ async function processTextInput(){
   btn.textContent='🔍 Analisando…'; btn.disabled=true;
   try{
     let parsed={};
-    if(ANTHROPIC_API_KEY&&ANTHROPIC_API_KEY!=='YOUR_ANTHROPIC_KEY'){
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:512,
-          messages:[{role:'user',content:`Extraia do texto abaixo informações de um terreno em São Paulo. Responda APENAS em JSON: {"endereco":"","bairro":"","area":"","corretor":"","zoneamento":"","status":"5.Frio","obs":""}. Use string vazia se não encontrar.\n\nTexto:\n${text}`}]})
+    try{
+      const resp=await fetch('/api/extrair-terreno',{
+        method:'POST', headers:{'content-type':'application/json'},
+        body:JSON.stringify({tipo:'texto', texto:text})
       });
       const d=await resp.json();
-      try{ parsed=JSON.parse((d.content?.[0]?.text||'{}').match(/\{[\s\S]*\}/)?.[0]||'{}'); }catch(e){}
-    } else {
-      parsed=extractFromText(text);
-    }
+      if(d.ok) parsed=d.parsed||{};
+      else { console.log('[extrair-terreno]', d.error); parsed=extractFromText(text); }
+    }catch(e){ console.log('[extrair-terreno] erro:', e.message); parsed=extractFromText(text); }
     _pendingTodo=parsed.todo||null;
     openModal(null);
     if(parsed.endereco)   document.getElementById('f-endereco').value=parsed.endereco;
@@ -9026,20 +9013,15 @@ async function processTextData(text){
   if(status){ status.style.display=''; status.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:13px">🔍 Analisando texto…</div>'; }
   try{
     let parsed={};
-    if(ANTHROPIC_API_KEY&&ANTHROPIC_API_KEY!=='YOUR_ANTHROPIC_KEY'){
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:512,
-          messages:[{role:'user',content:`Extraia deste texto de terreno: endereço, bairro, área em m², corretor, zoneamento. Responda APENAS em JSON: {"endereco":"","bairro":"","area":"","corretor":"","zoneamento":"","status":"5.Frio","obs":"","todo":""}. Texto:\n\n${text.slice(0,2000)}`}]})
+    try{
+      const resp=await fetch('/api/extrair-terreno',{
+        method:'POST', headers:{'content-type':'application/json'},
+        body:JSON.stringify({tipo:'texto', texto:text})
       });
       const d=await resp.json();
-      const txt=d.content?.[0]?.text||'{}';
-      try{parsed=JSON.parse(txt.match(/\{[\s\S]*\}/)?.[0]||'{}');}catch(e){}
-    } else {
-      parsed=extractFromText(text);
-    }
+      if(d.ok) parsed=d.parsed||{};
+      else { console.log('[extrair-terreno]', d.error); parsed=extractFromText(text); }
+    }catch(e){ console.log('[extrair-terreno] erro:', e.message); parsed=extractFromText(text); }
     _pendingTodo=parsed.todo||null;
     openModal(null);
     if(parsed.endereco) document.getElementById('f-endereco').value=parsed.endereco;
@@ -9075,25 +9057,19 @@ async function processDropFile(file){
   if(status){ status.style.display=''; status.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted);font-family:var(--mono);font-size:13px">🔍 Analisando arquivo…</div>'; }
   try{
     let parsed={};
-    if(file.type.startsWith('image/')&&ANTHROPIC_API_KEY&&ANTHROPIC_API_KEY!=='YOUR_ANTHROPIC_KEY'){
+    if(file.type.startsWith('image/')){
       const b64=await new Promise(resolve=>{
         const reader=new FileReader();
         reader.onload=e=>resolve(e.target.result.split(',')[1]);
         reader.readAsDataURL(file);
       });
-      const resp=await fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'x-api-key':ANTHROPIC_API_KEY,'anthropic-version':'2023-06-01',
-          'anthropic-dangerous-direct-browser-access':'true','content-type':'application/json'},
-        body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:512,
-          messages:[{role:'user',content:[
-            {type:'image',source:{type:'base64',media_type:file.type,data:b64}},
-            {type:'text',text:'Extraia deste print/email de terreno: endereço, bairro, área em m², corretor, zoneamento. Responda APENAS em JSON: {"endereco":"","bairro":"","area":"","corretor":"","zoneamento":"","status":"5.Frio","obs":"","todo":""}. Use string vazia se não encontrar.'}
-          ]}]})
+      const resp=await fetch('/api/extrair-terreno',{
+        method:'POST', headers:{'content-type':'application/json'},
+        body:JSON.stringify({tipo:'imagem', imagem_base64:b64, media_type:file.type})
       });
       const d=await resp.json();
-      const txt=d.content?.[0]?.text||'{}';
-      try{parsed=JSON.parse(txt.match(/\{[\s\S]*\}/)?.[0]||'{}');}catch(e){}
+      if(d.ok) parsed=d.parsed||{};
+      else console.log('[extrair-terreno]', d.error);
     }
     _pendingTodo=parsed.todo||null;
     openModal(null);
@@ -17519,3 +17495,4 @@ function responderFeedback(id){
 
 </body>
 </html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
