@@ -410,6 +410,20 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
     align-items:flex-end;
   }
 
+  /* O modal inteiro rola como um bloco só (header+corpo+rodapé) — sem isso,
+     ao preencher um formulário longo, o botão de fechar (✕) e o rodapé
+     (Cancelar/Salvar) somem tela acima/abaixo enquanto rola. Fixando header
+     no topo e rodapé embaixo, o botão de fechar fica sempre acessível. */
+  .modal-header {
+    position:sticky; top:0; z-index:5;
+    background:var(--surface);
+    border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+  }
+  .modal-footer {
+    position:sticky; bottom:0; z-index:5;
+    background:var(--surface);
+  }
+
   /* Legenda menor */
   .map-legend { display:none; }
 }
@@ -647,6 +661,17 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 }
 .dash-chip:hover { border-color:var(--accent); color:var(--accent); }
 .dash-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+.dash-filtros-toggle { display:none; white-space:nowrap; }
+#dash-filtros-arrow { display:inline-block; transition:transform .2s; }
+/* No celular os filtros do Painel ficam recolhidos atrás de um botão — a
+   pilha de chips (status/agrupar/visualização) tomava a tela toda antes de
+   mostrar qualquer terreno. */
+@media (max-width:768px){
+  .dash-filtros-toggle { display:inline-block; }
+  #dash-filters-wrap { display:none; }
+  #dash-filters-wrap.aberto { display:block; }
+  .dash-filtros-toggle.aberto #dash-filtros-arrow { transform:rotate(180deg); }
+}
 .dash-search-input {
   font-size:12px; font-family:var(--mono); padding:4px 10px; border-radius:20px;
   border:1px solid var(--border); background:var(--bg); color:var(--text);
@@ -1019,8 +1044,15 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 
 .geosampa-ctrl {
   position:absolute; top:12px; right:12px; z-index:600;
-  display:flex; flex-direction:column; gap:4px;
+  display:flex; flex-direction:column; align-items:flex-end; gap:4px;
 }
+.geosampa-ctrl-list { display:flex; flex-direction:column; gap:4px; }
+.geosampa-toggle {
+  display:none; background:#2C2C2C; border:1.5px solid #2C2C2C; border-radius:8px;
+  padding:6px 9px; font-size:13px; cursor:pointer; color:#fff;
+  box-shadow:0 2px 8px rgba(0,0,0,.25); align-items:center; gap:4px;
+}
+#geosampa-toggle-arrow { display:inline-block; transition:transform .2s; }
 .geosampa-btn {
   background:#2C2C2C; border:1.5px solid #2C2C2C; border-radius:8px;
   padding:5px 10px; font-size:11px; font-family:var(--sans); font-weight:600;
@@ -1029,6 +1061,14 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 }
 .geosampa-btn:hover { background:#3a3a3a; border-color:#3a3a3a; }
 .geosampa-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+/* No celular a lista de camadas some por padrão — só uma setinha discreta pra
+   abrir/fechar, em vez de 10 botões cobrindo o mapa inteiro. */
+@media (max-width:768px){
+  .geosampa-toggle { display:flex; }
+  .geosampa-ctrl-list { display:none; }
+  .geosampa-ctrl.aberto .geosampa-ctrl-list { display:flex; }
+  .geosampa-ctrl.aberto #geosampa-toggle-arrow { transform:rotate(180deg); }
+}
 
 /* ── FICHA DE AQUISIÇÃO ────────────────────────────────────────── */
 #ficha-overlay{display:none;position:fixed;inset:0;z-index:4000;background:rgba(0,0,0,.55);overflow-y:auto;padding:24px 16px;}
@@ -1417,16 +1457,21 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 
     <!-- GEOSAMPA TOGGLE -->
     <div class="geosampa-ctrl" id="geosampa-ctrl">
-      <button class="geosampa-btn" id="btn-geo-lotes" onclick="toggleGeoLayer('lotes')">🏘 Lotes</button>
-      <button class="geosampa-btn" id="btn-geo-zona" onclick="toggleGeoLayer('zona')">🏙 Zoneamento</button>
-      <button class="geosampa-btn" id="btn-geo-ouc" onclick="toggleOucLayer()" title="Perímetros de Operações Urbanas Consorciadas e Áreas de Intervenção Urbana (setor/subsetor quando disponível)">🏛 Operações Urbanas</button>
-      <button class="geosampa-btn" id="btn-geo-conc" onclick="toggleConcorrentes()">🏢 Concorrentes</button>
-      <button class="geosampa-btn" id="btn-geo-info" onclick="toggleLotesQuery()" title="Ativar consulta de lotes no mapa">🔍 Info lote</button>
-      <button class="geosampa-btn" id="btn-geo-itbi" onclick="toggleItbiMode()" title="Consultar transações ITBI de um lote">🏷️ ITBI</button>
-      <button class="geosampa-btn" id="btn-geo-itbiheat" onclick="toggleItbiHeatLayer()" title="Colorir os lotes pelo preço real de venda (ITBI) — aproxime o zoom">💰 Mapa Preços</button>
-      <button class="geosampa-btn" id="btn-geo-avenda" onclick="toggleAvendaMapMode()" title="Verificar se o imóvel está à venda online">🏠 À Venda</button>
-      <button class="geosampa-btn" id="btn-medir-area" onclick="toggleMedirArea()" title="Desenhar polígono/linha e medir área ou distância">📐 Medir</button>
-      <button class="geosampa-btn" id="btn-geo-mprospec" onclick="toggleMProspecLayer()" title="Prospecção: score, VGV estimado, proprietário e ITBI por lote">🔍 Prospecção</button>
+      <button class="geosampa-toggle" id="geosampa-toggle-btn" onclick="toggleGeoCtrlPanel()" title="Camadas do mapa">
+        <span id="geosampa-toggle-arrow">‹</span> 🗺️
+      </button>
+      <div class="geosampa-ctrl-list" id="geosampa-ctrl-list">
+        <button class="geosampa-btn" id="btn-geo-lotes" onclick="toggleGeoLayer('lotes')">🏘 Lotes</button>
+        <button class="geosampa-btn" id="btn-geo-zona" onclick="toggleGeoLayer('zona')">🏙 Zoneamento</button>
+        <button class="geosampa-btn" id="btn-geo-ouc" onclick="toggleOucLayer()" title="Perímetros de Operações Urbanas Consorciadas e Áreas de Intervenção Urbana (setor/subsetor quando disponível)">🏛 Operações Urbanas</button>
+        <button class="geosampa-btn" id="btn-geo-conc" onclick="toggleConcorrentes()">🏢 Concorrentes</button>
+        <button class="geosampa-btn" id="btn-geo-info" onclick="toggleLotesQuery()" title="Ativar consulta de lotes no mapa">🔍 Info lote</button>
+        <button class="geosampa-btn" id="btn-geo-itbi" onclick="toggleItbiMode()" title="Consultar transações ITBI de um lote">🏷️ ITBI</button>
+        <button class="geosampa-btn" id="btn-geo-itbiheat" onclick="toggleItbiHeatLayer()" title="Colorir os lotes pelo preço real de venda (ITBI) — aproxime o zoom">💰 Mapa Preços</button>
+        <button class="geosampa-btn" id="btn-geo-avenda" onclick="toggleAvendaMapMode()" title="Verificar se o imóvel está à venda online">🏠 À Venda</button>
+        <button class="geosampa-btn" id="btn-medir-area" onclick="toggleMedirArea()" title="Desenhar polígono/linha e medir área ou distância">📐 Medir</button>
+        <button class="geosampa-btn" id="btn-geo-mprospec" onclick="toggleMProspecLayer()" title="Prospecção: score, VGV estimado, proprietário e ITBI por lote">🔍 Prospecção</button>
+      </div>
     </div>
 
     <!-- LEGENDA -->
@@ -1466,42 +1511,47 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
         <div class="dash-card-title">Atas de Acompanhamento</div>
         <div class="dash-mes-label">clique no terreno para ver as entradas</div>
       </div>
-      <input type="text" id="dash-ata-search" class="dash-search-input" placeholder="🔍 Filtrar terreno…"
-        oninput="filterAtaList()"
-        style="font-size:12px;padding:5px 12px;min-width:180px;max-width:240px;">
-    </div>
-
-    <!-- Filtros -->
-    <div class="dash-filters" id="dash-filters">
-      <div class="dash-filter-group">
-        <span class="dash-filter-label">Status:</span>
-        <button class="dash-chip active" data-filter-status="" onclick="setDashFilter('status','',this)">Todos</button>
-        <button class="dash-chip" data-filter-status="3.Negociando" onclick="setDashFilter('status','3.Negociando',this)">Negociando</button>
-        <button class="dash-chip" data-filter-status="4.Análise" onclick="setDashFilter('status','4.Análise',this)">Análise</button>
-        <button class="dash-chip" data-filter-status="5.Frio" onclick="setDashFilter('status','5.Frio',this)">Frio</button>
-        <button class="dash-chip" data-filter-status="8.Descartado" onclick="setDashFilter('status','8.Descartado',this)">Descartado</button>
-      </div>
-      <div class="dash-filter-group">
-        <span class="dash-filter-label">Endereço:</span>
-        <input type="text" id="dash-search" class="dash-search-input" placeholder="Buscar endereço…" oninput="setDashFilter('search',this.value)">
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" id="dash-ata-search" class="dash-search-input" placeholder="🔍 Filtrar terreno…"
+          oninput="filterAtaList()"
+          style="font-size:12px;padding:5px 12px;min-width:140px;max-width:240px;">
+        <button class="dash-chip dash-filtros-toggle" id="dash-filtros-toggle-btn" onclick="toggleDashFiltros()">⚙️ Filtros <span id="dash-filtros-arrow">▾</span></button>
       </div>
     </div>
 
-    <div class="dash-filter-group" style="margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <select id="ata-resp-filter" onchange="setAtaResp(this.value)"
-        style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text);font-family:var(--sans);cursor:pointer;outline:none;">
-        <option value="">👤 Responsável — Todos</option>
-      </select>
-      <div style="width:1px;background:var(--border);align-self:stretch;margin:0 4px;"></div>
-      <span style="font-size:11px;color:var(--muted);font-family:var(--sans);font-weight:600;align-self:center;">Agrupar:</span>
-      <button class="dash-chip active" data-group-btn="bairro" onclick="setAtaGroup('bairro',this)">📍 Bairro</button>
-      <button class="dash-chip" data-group-btn="responsavel" onclick="setAtaGroup('responsavel',this)">👤 Responsável</button>
-      <button class="dash-chip" data-group-btn="data" onclick="setAtaGroup('data',this)">📅 Data</button>
-      <button class="dash-chip" data-group-btn="padrao" onclick="setAtaGroup('padrao',this)">▤ Padrão</button>
-      <div style="width:1px;background:var(--border);align-self:stretch;margin:0 4px;"></div>
-      <button id="ata-view-cards"  class="dash-chip active" onclick="setAtaView('cards',this)"  title="Visualização em cards">⊞ Cards</button>
-      <button id="ata-view-list"   class="dash-chip"        onclick="setAtaView('list',this)"   title="Visualização em lista">☰ Lista</button>
-      <button id="ata-view-kanban" class="dash-chip"        onclick="setAtaView('kanban',this)" title="Kanban — arraste o card para mudar o status">🗂 Kanban</button>
+    <div id="dash-filters-wrap">
+      <!-- Filtros -->
+      <div class="dash-filters" id="dash-filters">
+        <div class="dash-filter-group">
+          <span class="dash-filter-label">Status:</span>
+          <button class="dash-chip active" data-filter-status="" onclick="setDashFilter('status','',this)">Todos</button>
+          <button class="dash-chip" data-filter-status="3.Negociando" onclick="setDashFilter('status','3.Negociando',this)">Negociando</button>
+          <button class="dash-chip" data-filter-status="4.Análise" onclick="setDashFilter('status','4.Análise',this)">Análise</button>
+          <button class="dash-chip" data-filter-status="5.Frio" onclick="setDashFilter('status','5.Frio',this)">Frio</button>
+          <button class="dash-chip" data-filter-status="8.Descartado" onclick="setDashFilter('status','8.Descartado',this)">Descartado</button>
+        </div>
+        <div class="dash-filter-group">
+          <span class="dash-filter-label">Endereço:</span>
+          <input type="text" id="dash-search" class="dash-search-input" placeholder="Buscar endereço…" oninput="setDashFilter('search',this.value)">
+        </div>
+      </div>
+
+      <div class="dash-filter-group" style="margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <select id="ata-resp-filter" onchange="setAtaResp(this.value)"
+          style="font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text);font-family:var(--sans);cursor:pointer;outline:none;">
+          <option value="">👤 Responsável — Todos</option>
+        </select>
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 4px;"></div>
+        <span style="font-size:11px;color:var(--muted);font-family:var(--sans);font-weight:600;align-self:center;">Agrupar:</span>
+        <button class="dash-chip active" data-group-btn="bairro" onclick="setAtaGroup('bairro',this)">📍 Bairro</button>
+        <button class="dash-chip" data-group-btn="responsavel" onclick="setAtaGroup('responsavel',this)">👤 Responsável</button>
+        <button class="dash-chip" data-group-btn="data" onclick="setAtaGroup('data',this)">📅 Data</button>
+        <button class="dash-chip" data-group-btn="padrao" onclick="setAtaGroup('padrao',this)">▤ Padrão</button>
+        <div style="width:1px;background:var(--border);align-self:stretch;margin:0 4px;"></div>
+        <button id="ata-view-cards"  class="dash-chip" onclick="setAtaView('cards',this)"  title="Visualização em cards">⊞ Cards</button>
+        <button id="ata-view-list"   class="dash-chip" onclick="setAtaView('list',this)"   title="Visualização em lista">☰ Lista</button>
+        <button id="ata-view-kanban" class="dash-chip" onclick="setAtaView('kanban',this)" title="Kanban — arraste o card para mudar o status">🗂 Kanban</button>
+      </div>
     </div>
     <div class="dash-ata-grid" id="dash-ata-list"></div>
   </div>
@@ -3286,6 +3336,13 @@ const _geoLayers = {
   }),
 };
 const _geoActive = { lotes: false, zona: false };
+
+// No celular a lista de camadas fica escondida atrás dessa setinha (a lista
+// inteira toma a tela toda se ficar sempre aberta) — no desktop o CSS já
+// ignora essa classe e mantém os botões sempre visíveis como antes.
+function toggleGeoCtrlPanel(){
+  document.getElementById('geosampa-ctrl').classList.toggle('aberto');
+}
 
 function toggleGeoLayer(key){
   _geoActive[key] = !_geoActive[key];
@@ -6398,7 +6455,7 @@ let _dashStatusFilter=['3.Negociando']; // array — permite selecionar mais de 
 let _dashSearch='';
 let _ataRespFilter='';
 let _ataGroupMode='bairro';
-let _ataViewMode='cards';
+let _ataViewMode = (typeof window!=='undefined' && window.innerWidth<=768) ? 'list' : 'cards'; // no celular já abre em lista (mais compacto)
 let _statusChart=null,_mensalChart=null;
 
 function setDashFilter(type,value,btn){
@@ -6418,6 +6475,11 @@ function setDashFilter(type,value,btn){
     _dashSearch=value;
   }
   renderDashboard();
+}
+
+function toggleDashFiltros(){
+  document.getElementById('dash-filters-wrap')?.classList.toggle('aberto');
+  document.getElementById('dash-filtros-toggle-btn')?.classList.toggle('aberto');
 }
 
 function setAtaResp(value){
@@ -6600,6 +6662,11 @@ function _buildCondComercial(t, sql){
 }
 
 function renderAtaSection(){
+  // Mantém os botões de visualização sincronizados com _ataViewMode mesmo
+  // quando o valor inicial vem do default por tamanho de tela (mobile=lista).
+  document.getElementById('ata-view-cards')?.classList.toggle('active', _ataViewMode==='cards');
+  document.getElementById('ata-view-list')?.classList.toggle('active', _ataViewMode==='list');
+  document.getElementById('ata-view-kanban')?.classList.toggle('active', _ataViewMode==='kanban');
   const q=norm(document.getElementById('dash-ata-search')?.value||'');
   // No Kanban o status é a própria dimensão das colunas — ignora o filtro de
   // status do topo aqui (senão a maioria das colunas apareceria vazia).
@@ -11245,6 +11312,37 @@ renderList();
 // outro membro da equipe (no app dele) chega automaticamente aqui, sem precisar
 // dar F5. Antes era um .get() (foto única); agora é onSnapshot (ao vivo).
 let _snapRefreshTimer = null;
+// No celular (tela <=768px), a primeira abertura do mapa deve cair direto na
+// região onde há mais terrenos cadastrados (em vez do centro fixo de SP) —
+// só ajusta uma vez, no 1º carregamento, pra não puxar o mapa embaixo da
+// pessoa depois que ela já começou a navegar.
+let _mapaInicialAjustado = false;
+function _centroConcentracaoTerrenos(lista){
+  const pts = lista.filter(t=>t.lat!=null && t.lng!=null && !isNaN(t.lat) && !isNaN(t.lng));
+  if(!pts.length) return null;
+  // Grid de ~0,01° (~1km) — conta quantos terrenos caem em cada célula e pega
+  // a mais concentrada; usa a média dos pontos da célula vencedora (+ vizinhas
+  // imediatas, pra suavizar) como centro.
+  const CELL = 0.01;
+  const grid = {};
+  pts.forEach(t=>{
+    const key = Math.round(t.lat/CELL)+','+Math.round(t.lng/CELL);
+    (grid[key] = grid[key]||[]).push(t);
+  });
+  let melhorKey=null, melhorN=-1;
+  Object.entries(grid).forEach(([k,arr])=>{ if(arr.length>melhorN){ melhorN=arr.length; melhorKey=k; } });
+  if(!melhorKey) return null;
+  const [cy,cx] = melhorKey.split(',').map(Number);
+  const vizinhos = [];
+  for(let dy=-1; dy<=1; dy++) for(let dx=-1; dx<=1; dx++){
+    const k = (cy+dy)+','+(cx+dx);
+    if(grid[k]) vizinhos.push(...grid[k]);
+  }
+  const usados = vizinhos.length ? vizinhos : pts;
+  const lat = usados.reduce((s,t)=>s+t.lat,0)/usados.length;
+  const lng = usados.reduce((s,t)=>s+t.lng,0)/usados.length;
+  return {lat, lng, count: usados.length};
+}
 try {
   db.collection('terrenos').onSnapshot(snapshot=>{
     if(!snapshot.empty){
@@ -11262,6 +11360,11 @@ try {
       const batch=db.batch();
       terrenos.forEach(t=>{ batch.set(db.collection('terrenos').doc(String(t.id)),sanitize(t)); });
       batch.commit().catch(console.error);
+    }
+    if(!_mapaInicialAjustado && terrenos.length && window.innerWidth<=768){
+      _mapaInicialAjustado = true;
+      const centro = _centroConcentracaoTerrenos(terrenos);
+      if(centro) map.setView([centro.lat, centro.lng], 14);
     }
     // Não redesenha o mapa/lista enquanto a pessoa está no meio de uma interação
     // (modal aberto, desenhando polígono, selecionando lotes no mapa, etc.) —
