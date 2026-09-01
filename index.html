@@ -4702,13 +4702,18 @@ function toggleMetroProjetoLayer(){
     _metroProjetoLayer = L.layerGroup();
     const dados = (typeof METRO_DATA!=='undefined' && METRO_DATA) || {linhasProjeto:[],estacoesProjeto:[]};
     (dados.linhasProjeto||[]).forEach(l=>{
+      // l.linha já vem com "(projeto)" no nome (dados oficiais GeoSampa) —
+      // cai no texto genérico só se faltar (arquivo antigo/fallback).
       L.polyline(l.coords, { color:'#7c3aed', weight:4, opacity:0.75, dashArray:'8 6' })
-        .bindTooltip('🚧 Linha de Metrô — projeto (traçado sujeito a alterações)', { sticky:true })
+        .bindTooltip('🚧 '+escHtml(l.linha||'Linha de Metrô — projeto')+' (traçado sujeito a alterações)', { sticky:true })
         .addTo(_metroProjetoLayer);
     });
     (dados.estacoesProjeto||[]).forEach(e=>{
+      const tip = e.nome
+        ? `🚧 ${escHtml(e.nome)}<br>${escHtml(e.linha||'Metrô — projeto')} (posição/traçado sujeitos a alterações)`
+        : '🚧 Estação de Metrô — projeto (posição/traçado sujeitos a alterações)';
       L.circleMarker([e.lat,e.lng], { radius:5, weight:2, color:'#7c3aed', fillColor:'#fff', fillOpacity:1, dashArray:'3 2' })
-        .bindTooltip('🚧 Estação de Metrô — projeto (posição/traçado sujeitos a alterações)', { className:'geo-lote-tip' })
+        .bindTooltip(tip, { className:'geo-lote-tip' })
         .addTo(_metroProjetoLayer);
     });
   }
