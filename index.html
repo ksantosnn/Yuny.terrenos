@@ -304,17 +304,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
 
 /* MAP LEGEND */
 .map-legend{position:absolute;bottom:28px;right:12px;z-index:500;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-size:11px;box-shadow:0 2px 12px rgba(0,0,0,.08);}
-
-/* BUSCA DE ENDEREÇO NO MAPA (lupa flutuante, estilo Google Maps) — sugestão do
-   Alexandre no widget de Sugestões: uma caixa de busca sempre visível no
-   mapa (não escondida dentro do filtro lateral) + link direto pro Street
-   View no resultado. */
-.map-search-ctrl{position:absolute;top:12px;left:60px;z-index:600;display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:0 2px 12px rgba(0,0,0,.15);overflow:hidden;}
-.map-search-ctrl input{border:none;outline:none;padding:9px 10px;font-size:13px;font-family:var(--sans);width:220px;background:transparent;color:var(--text);}
-.map-search-ctrl input::placeholder{color:var(--muted);}
-.map-search-ctrl button{border:none;background:var(--accent);color:#fff;padding:0 14px;cursor:pointer;font-size:14px;align-self:stretch;}
-.map-search-ctrl button:hover{opacity:.88;}
-@media (max-width:768px){ .map-search-ctrl{ left:8px; top:8px; } .map-search-ctrl input{ width:150px; } }
 .legend-item{display:flex;align-items:center;gap:8px;margin-bottom:4px;color:var(--text);font-family:var(--mono);font-size:10px;}
 .legend-swatch{width:24px;height:12px;border-radius:3px;flex-shrink:0;opacity:.75;}
 
@@ -1554,13 +1543,6 @@ header h1{font-size:15px;font-weight:600;letter-spacing:.04em;text-transform:upp
     <button class="btn-mobile-add" onclick="startNewTerreno()">+ Cadastrar Terreno</button>
     <button class="btn-mobile-list" onclick="openMobileList()">☰ Lista</button>
     <div id="map"></div>
-
-    <!-- BUSCA DE ENDEREÇO NO MAPA (estilo Google Maps) -->
-    <div class="map-search-ctrl" id="map-search-ctrl">
-      <input type="text" id="map-search-input" placeholder="🔍 Buscar endereço no mapa…"
-        onkeydown="if(event.key==='Enter'){ event.preventDefault(); buscarEnderecoNoMapa(); }">
-      <button onclick="buscarEnderecoNoMapa()" title="Buscar endereço e ir até lá no mapa">🔍</button>
-    </div>
 
     <!-- BARRA DE DESENHO -->
     <div class="draw-toolbar" id="draw-toolbar">
@@ -9198,53 +9180,6 @@ function _removeSearchMarker(){
 // mais próxima daquele ponto automaticamente).
 function _googleStreetViewUrl(lat, lng){
   return `https://www.google.com/maps?layer=c&cbll=${lat},${lng}`;
-}
-
-// Caixa de busca de endereço flutuante sobre o mapa (sugestão do Alexandre no
-// widget de Sugestões — "lupa igual ao Google Maps"). Diferente do campo de
-// busca da barra lateral (#search, via _triggerGeoSearch), que só geocoda
-// quando a busca não bate com nenhum terreno cadastrado: esta aqui sempre
-// geocoda o texto digitado e leva o mapa até lá, sem depender do cadastro.
-async function buscarEnderecoNoMapa(){
-  const inp = document.getElementById('map-search-input');
-  const q = (inp?.value||'').trim();
-  if(!q){ showToast('Digite um endereço pra buscar.'); return; }
-  const btn = document.querySelector('#map-search-ctrl button');
-  if(btn) btn.textContent = '⏳';
-  try{
-    const query = /sp|são paulo|sao paulo/i.test(q) ? q : q + ', São Paulo, SP';
-    const resp = await fetch(API_BASE+'/api/geocode?q=' + encodeURIComponent(query));
-    const data = await resp.json();
-    if(!data || !data[0]){ showToast('Endereço não encontrado.'); return; }
-    const lat = parseFloat(data[0].lat);
-    const lng = parseFloat(data[0].lon);
-    if(isNaN(lat)||isNaN(lng)){ showToast('Endereço não encontrado.'); return; }
-    _removeSearchMarker();
-    const icon = L.divIcon({
-      className:'',
-      html:`<div style="width:28px;height:28px;background:#2563eb;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-size:13px">🔍</div>`,
-      iconSize:[28,28], iconAnchor:[14,14]
-    });
-    const gmaps = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-    const streetView = _googleStreetViewUrl(lat, lng);
-    _searchMarker = L.marker([lat,lng],{icon, title: data[0].display_name, zIndexOffset:1000})
-      .addTo(map)
-      .bindPopup(
-        `<b>📍 ${escHtml(q)}</b><br><small>${escHtml(data[0].display_name||'')}</small><br>`+
-        `<div style="display:flex;gap:6px;margin-top:8px;">`+
-          `<a href="${gmaps}" target="_blank" style="flex:1;text-align:center;padding:4px 8px;background:#f0fdfe;border:1px solid #00B0B933;border-radius:6px;color:#00858c;text-decoration:none;font-size:11px;font-weight:600;">🌎 Google Maps</a>`+
-          `<a href="${streetView}" target="_blank" style="flex:1;text-align:center;padding:4px 8px;background:#f0fdfe;border:1px solid #00B0B933;border-radius:6px;color:#00858c;text-decoration:none;font-size:11px;font-weight:600;">📸 Street View</a>`+
-        `</div>`+
-        `<button onclick="cadastrarNoEndereco(${lat},${lng},'${q.replace(/'/g,"\\'")}');this.closest('.leaflet-popup').querySelector('.leaflet-popup-close-button').click()" style="width:100%;margin-top:6px;background:#00B0B9;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px">+ Cadastrar terreno aqui</button>`
-      );
-    map.setView([lat,lng], 17, {animate:true});
-    _searchMarker.openPopup();
-  }catch(e){
-    console.warn('[buscarEnderecoNoMapa]', e);
-    showToast('Erro ao buscar o endereço. Tente de novo.');
-  }finally{
-    if(btn) btn.textContent = '🔍';
-  }
 }
 
 function _triggerGeoSearch(q){
