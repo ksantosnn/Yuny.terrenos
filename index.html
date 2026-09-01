@@ -9182,6 +9182,25 @@ function _googleStreetViewUrl(lat, lng){
   return `https://www.google.com/maps?layer=c&cbll=${lat},${lng}`;
 }
 
+// Geocodifica direto no Nominatim (OpenStreetMap), sem passar pelo
+// /api/geocode do nosso servidor.js. Motivo: quando o app é aberto pelo link
+// público (nnyuny.github.io), sem o backend na nuvem configurado (API_BASE
+// ainda aponta pro placeholder do Render — ver DEPLOY_NUVEM.md), qualquer
+// chamada a /api/... cai num 503, e a busca de endereço simplesmente não
+// fazia nada. O Nominatim aceita chamada direta do navegador (CORS liberado
+// no servidor público deles) — a política de uso deles pede um User-Agent OU
+// um Referer identificando o app; como o navegador já manda o Referer
+// (a própria URL do site) em toda requisição, não falta nada. Resultado:
+// a busca de endereço passa a funcionar em qualquer lugar, mesmo sem nenhum
+// deploy de servidor — só as outras funções (/api/geosampa-*, ITBI, etc.)
+// continuam precisando do servidor local ou do deploy na nuvem.
+async function _geocodeDireto(q, limit){
+  const url = 'https://nominatim.openstreetmap.org/search?q='+encodeURIComponent(q)+'&format=json&limit='+(limit||1)+'&accept-language=pt-BR';
+  const r = await fetch(url);
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
 function _triggerGeoSearch(q){
   clearTimeout(_searchGeoTimer);
   if(q.length < 5){ _removeSearchMarker(); return; }
@@ -9192,8 +9211,7 @@ function _triggerGeoSearch(q){
     try {
       // Força busca em SP se não tiver cidade
       const query = /sp|são paulo|sao paulo/i.test(q) ? q : q + ', São Paulo, SP';
-      const resp = await fetch(API_BASE+'/api/geocode?q=' + encodeURIComponent(query));
-      const data = await resp.json();
+      const data = await _geocodeDireto(query, 1);
       if(!data || !data[0]) return;
       const lat = parseFloat(data[0].lat);
       const lng = parseFloat(data[0].lon);
@@ -21263,16 +21281,27 @@ function _mprospecBuscarMesmoProprietario(propEnc){
   <div style="flex-shrink:0;padding:9px 16px;background:#fff7e6;border-bottom:1px solid #f0d9a0;font-size:12px;color:#7a5c00;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
     ℹ️ Essa é a ferramenta do Matheus — uma fonte de leads à parte, sem ligação com os dados do LandBank. Pra cadastrar um terreno encontrado direto no sistema (já com PGV, comparação e painel automáticos), use o botão <b>🔍 Prospecção</b> na aba <b>🗺 Mapa</b>.
   </div>
-  <!-- Buscador de Terrenos (ferramenta do Matheus) — embutido via iframe,
-       isolado do resto do app (sem risco de colisão de nomes de variável/
-       função entre os dois sistemas). Sempre carrega a versão mais recente
-       publicada no GitHub Pages, sem precisar mexer em nada aqui quando ele
-       atualizar a ferramenta. -->
-  <iframe
-    src="https://nnyuny.github.io/Yuny.terrenos/buscador/"
-    style="width:100%;flex:1;border:none;display:block;min-height:0;"
-    title="Buscador de Terrenos"
-  ></iframe>
+  <!-- Buscador de Terrenos (ferramenta do Matheus) — NÃO é embutido via iframe
+       porque a ferramenta exige login corporativo Microsoft, e a tela de login
+       da Microsoft bloqueia ser carregada dentro de um iframe (X-Frame-Options),
+       ficando em branco. Por isso abrimos direto num link/nova aba. Aponta pro
+       GitHub Pages do próprio repositório do Matheus (matheusfmaria/yuny-buscador-terrenos),
+       que já tem todos os pacotes de dados por distrito publicados — a cópia
+       antiga em nnyuny.github.io/Yuny.terrenos/buscador/ ficou incompleta
+       (só o index.html, sem os dados) e não deve ser usada. -->
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:24px;">
+    <div style="max-width:420px;text-align:center;background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:14px;padding:32px 28px;box-shadow:0 4px 18px rgba(0,0,0,.06);">
+      <div style="font-size:40px;margin-bottom:10px;">🔎</div>
+      <div style="font-size:16px;font-weight:800;color:var(--navy,#1a3c4d);margin-bottom:6px;">Buscador de Terrenos — Matheus</div>
+      <div style="font-size:12.5px;color:var(--muted,#6b7280);line-height:1.5;margin-bottom:20px;">
+        Abre em uma nova aba (pede login com a conta Microsoft/Outlook da Yuny).
+      </div>
+      <a href="https://matheusfmaria.github.io/yuny-buscador-terrenos/" target="_blank" rel="noopener"
+        style="display:inline-block;padding:10px 22px;border-radius:8px;background:var(--accent,#00B0B9);color:#fff;font-size:13px;font-weight:700;text-decoration:none;">
+        Abrir Buscador de Terrenos ↗
+      </a>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: Radar Sexta (Previsão) -->
